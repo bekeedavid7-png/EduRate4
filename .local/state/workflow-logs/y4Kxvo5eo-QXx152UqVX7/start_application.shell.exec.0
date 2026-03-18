@@ -1,0 +1,41 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+[1G[0K8:58:40 PM [express] serving on port 5000
+8:58:42 PM [express] GET /api/auth/me 401 in 1ms :: {"message":"Unauthorized"}
+8:58:42 PM [express] GET /api/lecturers 200 in 5ms :: [{"id":2,"username":"dace","role":"lecturer","name":"David's Team","email":"","emailVerified":false,"department":"Computer Science","courseId":2,"courseCode":"CS201","courseName":"Data Structures"},{"id":4,"username":"asdf","role":"lecturer","name":"asdfgh","email":"","emailVerified":false,"department":"Computer Science","courseId":2,"courseCode":"CS201","courseName":"Data Structures"},{"id":5,"username":"danedoe","role":"lecturer","name":"jane","email":"","emailVerified":false,"department":"Mathematics","courseId":3,"courseCode":"MATH101","courseName":"Calculus I"},{"id":7,"username":"doe","role":"lecturer","name":"jane","email":"","emailVerified":false,"department":"Physics","courseId":5,"courseCode":"PHYS101","courseName":"Physics I"}]
+8:59:12 PM [express] GET /api/auth/me 401 in 1ms :: {"message":"Unauthorized"}
+8:59:12 PM [express] GET /api/lecturers 200 in 13ms :: [{"id":2,"username":"dace","role":"lecturer","name":"David's Team","email":"","emailVerified":false,"department":"Computer Science","courseId":2,"courseCode":"CS201","courseName":"Data Structures"},{"id":4,"username":"asdf","role":"lecturer","name":"asdfgh","email":"","emailVerified":false,"department":"Computer Science","courseId":2,"courseCode":"CS201","courseName":"Data Structures"},{"id":5,"username":"danedoe","role":"lecturer","name":"jane","email":"","emailVerified":false,"department":"Mathematics","courseId":3,"courseCode":"MATH101","courseName":"Calculus I"},{"id":7,"username":"doe","role":"lecturer","name":"jane","email":"","emailVerified":false,"department":"Physics","courseId":5,"courseCode":"PHYS101","courseName":"Physics I"}]
+8:59:23 PM [express] GET /api/courses 200 in 10ms :: [{"id":1,"department":"Computer Science","code":"CS101","name":"Intro to Computer Science"},{"id":2,"department":"Computer Science","code":"CS201","name":"Data Structures"},{"id":3,"department":"Mathematics","code":"MATH101","name":"Calculus I"},{"id":4,"department":"Mathematics","code":"MATH201","name":"Linear Algebra"},{"id":5,"department":"Physics","code":"PHYS101","name":"Physics I"}]
+8:59:35 PM [express] POST /api/auth/login 401 in 11ms :: {"message":"Invalid credentials"}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m9:04:12 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/login.tsx, /src/index.css[22m
+9:04:28 PM [express] POST /api/auth/login 401 in 11ms :: {"message":"Invalid credentials"}
+9:04:45 PM [express] GET /api/lecturers 304 in 11ms :: [{"id":2,"username":"dace","role":"lecturer","name":"David's Team","email":"","emailVerified":false,"department":"Computer Science","courseId":2,"courseCode":"CS201","courseName":"Data Structures"},{"id":4,"username":"asdf","role":"lecturer","name":"asdfgh","email":"","emailVerified":false,"department":"Computer Science","courseId":2,"courseCode":"CS201","courseName":"Data Structures"},{"id":5,"username":"danedoe","role":"lecturer","name":"jane","email":"","emailVerified":false,"department":"Mathematics","courseId":3,"courseCode":"MATH101","courseName":"Calculus I"},{"id":7,"username":"doe","role":"lecturer","name":"jane","email":"","emailVerified":false,"department":"Physics","courseId":5,"courseCode":"PHYS101","courseName":"Physics I"}]

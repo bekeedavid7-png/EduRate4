@@ -1,0 +1,26 @@
+I am building a full-stack academic app called 'EDURATE'. I need you to implement the following core logic across my frontend and backend:
+
+1. **Course & Evaluation Generation:**
+   - Create 10 dummy courses (e.g., CS101, MATH201, BIO302) and store them in a Firestore 'Courses' collection.
+   - Create a set of 10 evaluation questions (e.g., "Clarity of teaching", "Quality of materials", "Engagement level").
+   - Automatically add these courses to the 'Pending Evaluations' section for a logged-in student.
+
+2. **Evaluation Logic & Data Flow:**
+   - Fix the 'Submit Evaluation' button so that when clicked, it saves the 10 answers to a new 'Evaluations' collection in Firestore.
+   - Logic: After a successful submission, the specific course must be removed from the 'Pending' array and added to a 'Completed' array in the user's document.
+   - Update the UI so the dashboard instantly reflects this move to the 'Completed Evaluations' section.
+
+3. **Lecturer Page & Course Connection:**
+   - Create a functional 'Lecturer Profile' page. 
+   - Add a 'Sign Up' flow where a lecturer chooses their Department and ONE specific course from the 'Courses' collection.
+   - Connect the logic so that the 'My Courses' section on the lecturer's page ONLY shows the course they chose during signup.
+   - Add a 'Lecturer List' element on the Admin/Home page where every new lecturer who signs up is automatically displayed.
+
+4. **Analytics & Visuals:**
+   - On the Lecturer page, fetch all completed evaluations for that specific lecturer.
+   - Use Chart.js or Recharts to display a Bar Chart (for average scores per question) and a Pie Chart (for overall satisfaction distribution).
+
+5. **Clarity & Vague Statement Check:**
+   - Review my existing code and identify any vague variable names or incomplete functions.
+   - Fix any "placeholder" code (like 'console.log("submit")') and replace it with real Firebase async/await logic.
+   - Ensure the lecturer's page uses real data from Firestore, not mock objects.
