@@ -16,7 +16,7 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role", { enum: ['student', 'lecturer'] }).notNull(),
+  role: text("role", { enum: ['student', 'lecturer', 'admin'] }).notNull(),
   name: text("name").notNull(),
   email: text("email").notNull().default(""),
   emailVerified: boolean("email_verified").notNull().default(false),
@@ -27,7 +27,6 @@ export const users = pgTable("users", {
   courseId: integer("course_id").references(() => courses.id),
 });
 
-// NEW: junction table for multiple courses per lecturer
 export const lecturerCourses = pgTable("lecturer_courses", {
   id: serial("id").primaryKey(),
   lecturerId: integer("lecturer_id").notNull().references(() => users.id),

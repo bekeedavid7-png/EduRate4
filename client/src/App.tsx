@@ -11,6 +11,7 @@ import Register from "@/pages/register";
 import StudentDashboard from "@/pages/student-dashboard";
 import LecturerDashboard from "@/pages/lecturer-dashboard";
 import LecturerProfile from "@/pages/lecturer-profile";
+import AdminDashboard from "@/pages/admin-dashboard";
 import Evaluate from "@/pages/evaluate";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/student" component={StudentDashboard} />
       <Route path="/lecturer" component={LecturerDashboard} />
       <Route path="/lecturer/profile" component={LecturerProfile} />
+      <Route path="/admin" component={AdminDashboard} />
       <Route path="/evaluate/:lecturerId/:courseId" component={Evaluate} />
       <Route component={NotFound} />
     </Switch>
@@ -46,4 +48,3 @@ function App() {
 }
 
 export default App;
-

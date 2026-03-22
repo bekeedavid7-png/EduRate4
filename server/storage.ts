@@ -1,15 +1,8 @@
 import { db } from "./db";
 import { eq, and, gt } from "drizzle-orm";
 import {
-  users,
-  courses,
-  evaluations,
-  lecturerCourses,
-  type User,
-  type InsertUser,
-  type Course,
-  type Evaluation,
-  type EvaluationSummary
+  users, courses, evaluations, lecturerCourses,
+  type User, type InsertUser, type Course, type Evaluation, type EvaluationSummary
 } from "@shared/schema";
 
 export interface IStorage {
@@ -20,14 +13,20 @@ export interface IStorage {
   getUserByResetToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, data: Partial<User>): Promise<User>;
+  deleteUser(id: number): Promise<void>;
+  getAllUsers(): Promise<User[]>;
   getCourses(): Promise<Course[]>;
   getCourse(id: number): Promise<Course | undefined>;
+  createCourse(course: { department: string; code: string; name: string }): Promise<Course>;
+  deleteCourse(id: number): Promise<void>;
   getLecturers(): Promise<(User & { courseCode?: string, courseName?: string })[]>;
   getLecturerCoursesDetails(lecturerId: number): Promise<Course[]>;
   setLecturerCourses(lecturerId: number, courseIds: number[]): Promise<void>;
   getEvaluationsByStudent(studentId: number): Promise<Evaluation[]>;
   getEvaluationsByLecturer(lecturerId: number): Promise<Evaluation[]>;
+  getAllEvaluations(): Promise<Evaluation[]>;
   createEvaluation(evaluation: Omit<Evaluation, 'id' | 'createdAt'>): Promise<Evaluation>;
+  deleteEvaluation(id: number): Promise<void>;
   getLecturerSummary(lecturerId: number): Promise<EvaluationSummary>;
 }
 
@@ -53,10 +52,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByResetToken(token: string): Promise<User | undefined> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(and(eq(users.resetPasswordToken, token), gt(users.resetPasswordExpiry, new Date())));
+    const [user] = await db.select().from(users).where(
+      and(eq(users.resetPasswordToken, token), gt(users.resetPasswordExpiry, new Date()))
+    );
     return user;
   }
 
@@ -70,6 +68,15 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(lecturerCourses).where(eq(lecturerCourses.lecturerId, id));
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
   async getCourses(): Promise<Course[]> {
     return await db.select().from(courses);
   }
@@ -79,16 +86,22 @@ export class DatabaseStorage implements IStorage {
     return course;
   }
 
-  // Returns one row per lecturer-course combo (for student dashboard cards)
+  async createCourse(course: { department: string; code: string; name: string }): Promise<Course> {
+    const [newCourse] = await db.insert(courses).values(course).returning();
+    return newCourse;
+  }
+
+  async deleteCourse(id: number): Promise<void> {
+    await db.delete(lecturerCourses).where(eq(lecturerCourses.courseId, id));
+    await db.delete(courses).where(eq(courses.id, id));
+  }
+
   async getLecturers(): Promise<(User & { courseCode?: string, courseName?: string })[]> {
-    const result = await db.select({
-      user: users,
-      course: courses,
-    })
-    .from(users)
-    .innerJoin(lecturerCourses, eq(users.id, lecturerCourses.lecturerId))
-    .innerJoin(courses, eq(lecturerCourses.courseId, courses.id))
-    .where(eq(users.role, 'lecturer'));
+    const result = await db.select({ user: users, course: courses })
+      .from(users)
+      .innerJoin(lecturerCourses, eq(users.id, lecturerCourses.lecturerId))
+      .innerJoin(courses, eq(lecturerCourses.courseId, courses.id))
+      .where(eq(users.role, 'lecturer'));
 
     return result.map(r => ({
       ...r.user,
@@ -121,9 +134,17 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(evaluations).where(eq(evaluations.lecturerId, lecturerId));
   }
 
+  async getAllEvaluations(): Promise<Evaluation[]> {
+    return await db.select().from(evaluations);
+  }
+
   async createEvaluation(evalData: Omit<Evaluation, 'id' | 'createdAt'>): Promise<Evaluation> {
     const [evaluation] = await db.insert(evaluations).values(evalData).returning();
     return evaluation;
+  }
+
+  async deleteEvaluation(id: number): Promise<void> {
+    await db.delete(evaluations).where(eq(evaluations.id, id));
   }
 
   async getLecturerSummary(lecturerId: number): Promise<EvaluationSummary> {
@@ -145,16 +166,11 @@ export class DatabaseStorage implements IStorage {
     const dist = { excellent: 0, good: 0, average: 0, poor: 0 };
 
     for (const e of evals) {
-      sumOverall += e.overallRating;
-      sumClarity += e.clarityRating;
-      sumEngagement += e.engagementRating;
-      sumMaterials += e.materialsRating;
-      sumOrganization += e.organizationRating;
-      sumFeedback += e.feedbackRating;
-      sumPace += e.paceRating;
-      sumSupport += e.supportRating;
-      sumFairness += e.fairnessRating;
-      sumRelevance += e.relevanceRating;
+      sumOverall += e.overallRating; sumClarity += e.clarityRating;
+      sumEngagement += e.engagementRating; sumMaterials += e.materialsRating;
+      sumOrganization += e.organizationRating; sumFeedback += e.feedbackRating;
+      sumPace += e.paceRating; sumSupport += e.supportRating;
+      sumFairness += e.fairnessRating; sumRelevance += e.relevanceRating;
       if (e.overallRating === 5) dist.excellent++;
       else if (e.overallRating === 4) dist.good++;
       else if (e.overallRating === 3) dist.average++;
