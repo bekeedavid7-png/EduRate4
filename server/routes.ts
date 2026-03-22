@@ -21,6 +21,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (existingUser) return res.status(400).send({ message: "Username already exists" });
 
       if (req.body.email) {
+        // Only allow Babcock University email addresses
+        const emailLower = req.body.email.toLowerCase();
+        const allowedDomains = ['@student.babcock.edu.ng', '@babcock.edu.ng'];
+        const isAllowed = allowedDomains.some(domain => emailLower.endsWith(domain));
+        if (!isAllowed) {
+          return res.status(400).json({ message: "Only Babcock University email addresses are allowed (@student.babcock.edu.ng or @babcock.edu.ng)" });
+        }
+
         const existingEmail = await storage.getUserByEmail(req.body.email);
         if (existingEmail) return res.status(400).json({ message: "An account with this email already exists" });
       }
@@ -32,7 +40,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const user = await storage.createUser({
         ...input,
-        courseId: null, // use junction table instead
+        courseId: null,
         password: hashedPassword,
         email: input.email || "",
         emailVerified: false,
