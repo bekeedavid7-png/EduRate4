@@ -27,6 +27,13 @@ export const users = pgTable("users", {
   courseId: integer("course_id").references(() => courses.id),
 });
 
+// NEW: junction table for multiple courses per lecturer
+export const lecturerCourses = pgTable("lecturer_courses", {
+  id: serial("id").primaryKey(),
+  lecturerId: integer("lecturer_id").notNull().references(() => users.id),
+  courseId: integer("course_id").notNull().references(() => courses.id),
+});
+
 export const evaluations = pgTable("evaluations", {
   id: serial("id").primaryKey(),
   studentId: integer("student_id").notNull().references(() => users.id),
@@ -48,34 +55,27 @@ export const evaluations = pgTable("evaluations", {
 
 // === RELATIONS ===
 export const usersRelations = relations(users, ({ one, many }) => ({
-  course: one(courses, {
-    fields: [users.courseId],
-    references: [courses.id],
-  }),
+  course: one(courses, { fields: [users.courseId], references: [courses.id] }),
+  lecturerCourses: many(lecturerCourses),
   givenEvaluations: many(evaluations, { relationName: 'student' }),
   receivedEvaluations: many(evaluations, { relationName: 'lecturer' }),
 }));
 
 export const coursesRelations = relations(courses, ({ many }) => ({
   lecturers: many(users),
+  lecturerCourses: many(lecturerCourses),
   evaluations: many(evaluations),
 }));
 
+export const lecturerCoursesRelations = relations(lecturerCourses, ({ one }) => ({
+  lecturer: one(users, { fields: [lecturerCourses.lecturerId], references: [users.id] }),
+  course: one(courses, { fields: [lecturerCourses.courseId], references: [courses.id] }),
+}));
+
 export const evaluationsRelations = relations(evaluations, ({ one }) => ({
-  student: one(users, {
-    fields: [evaluations.studentId],
-    references: [users.id],
-    relationName: 'student'
-  }),
-  lecturer: one(users, {
-    fields: [evaluations.lecturerId],
-    references: [users.id],
-    relationName: 'lecturer'
-  }),
-  course: one(courses, {
-    fields: [evaluations.courseId],
-    references: [courses.id],
-  }),
+  student: one(users, { fields: [evaluations.studentId], references: [users.id], relationName: 'student' }),
+  lecturer: one(users, { fields: [evaluations.lecturerId], references: [users.id], relationName: 'lecturer' }),
+  course: one(courses, { fields: [evaluations.courseId], references: [courses.id] }),
 }));
 
 // === BASE SCHEMAS ===
@@ -84,15 +84,12 @@ export const insertUserSchema = createInsertSchema(users).omit({ id: true, email
 export const insertEvaluationSchema = createInsertSchema(evaluations).omit({ id: true, createdAt: true, studentId: true });
 
 // === EXPLICIT API CONTRACT TYPES ===
-
 export type Course = typeof courses.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Evaluation = typeof evaluations.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
-
 export type UserWithoutPassword = Omit<User, 'password'>;
 
-// Requests
 export const loginSchema = z.object({
   username: z.string(),
   password: z.string(),
@@ -100,6 +97,7 @@ export const loginSchema = z.object({
 export type LoginRequest = z.infer<typeof loginSchema>;
 
 export const registerSchema = insertUserSchema.extend({
+  courseIds: z.array(z.coerce.number()).optional(),
   courseId: z.coerce.number().optional(),
   email: z.string().email("Please enter a valid email address"),
 });

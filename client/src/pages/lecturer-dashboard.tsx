@@ -1,11 +1,12 @@
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/hooks/use-auth";
 import { useLecturerSummary } from "@/hooks/use-dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { BookOpen, Users, Star, TrendingUp } from "lucide-react";
+import { BookOpen, Users, Star, TrendingUp, UserCog } from "lucide-react";
 
 export default function LecturerDashboard() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -13,9 +14,7 @@ export default function LecturerDashboard() {
   const { data: summary, isLoading: isSummaryLoading } = useLecturerSummary();
 
   useEffect(() => {
-    if (!isAuthLoading && (!user || user.role !== 'lecturer')) {
-      setLocation('/login');
-    }
+    if (!isAuthLoading && (!user || user.role !== 'lecturer')) setLocation('/login');
   }, [user, isAuthLoading, setLocation]);
 
   if (isAuthLoading || isSummaryLoading) {
@@ -25,10 +24,6 @@ export default function LecturerDashboard() {
           <div className="h-10 bg-slate-200 rounded w-48"></div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {[1,2,3,4].map(i => <div key={i} className="h-32 bg-slate-200 rounded-2xl"></div>)}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="h-[400px] bg-slate-200 rounded-2xl"></div>
-            <div className="h-[400px] bg-slate-200 rounded-2xl"></div>
           </div>
         </div>
       </Layout>
@@ -51,28 +46,47 @@ export default function LecturerDashboard() {
   ];
 
   const pieData = [
-    { name: 'Excellent (5)', value: summary.ratingDistribution.excellent, color: '#3b82f6' }, // Blue
-    { name: 'Good (4)', value: summary.ratingDistribution.good, color: '#8b5cf6' },      // Indigo
-    { name: 'Average (3)', value: summary.ratingDistribution.average, color: '#f59e0b' },   // Amber
-    { name: 'Poor (1-2)', value: summary.ratingDistribution.poor, color: '#ef4444' },       // Red
+    { name: 'Excellent (5)', value: summary.ratingDistribution.excellent, color: '#3b82f6' },
+    { name: 'Good (4)', value: summary.ratingDistribution.good, color: '#8b5cf6' },
+    { name: 'Average (3)', value: summary.ratingDistribution.average, color: '#f59e0b' },
+    { name: 'Poor (1-2)', value: summary.ratingDistribution.poor, color: '#ef4444' },
   ].filter(d => d.value > 0);
+
+  const lecturerCourses = (summary as any).courses || [];
 
   return (
     <Layout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-display font-bold text-slate-900">Lecturer Dashboard</h1>
-        <p className="text-slate-500 mt-1">Analytics and feedback summary</p>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-slate-900">Lecturer Dashboard</h1>
+          <p className="text-slate-500 mt-1">Analytics and feedback summary</p>
+        </div>
+        <Link href="/lecturer/profile">
+          <Button variant="outline" className="flex items-center gap-2 rounded-xl border-slate-200">
+            <UserCog className="w-4 h-4" />
+            Edit Profile
+          </Button>
+        </Link>
       </div>
 
-      {summary.course && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-8 flex items-center gap-4">
-          <div className="bg-primary/10 p-4 rounded-xl">
-            <BookOpen className="w-8 h-8 text-primary" />
+      {/* Assigned Courses */}
+      {lecturerCourses.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-primary/10 p-3 rounded-xl">
+              <BookOpen className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned Courses</div>
+              <div className="text-sm text-slate-600">{lecturerCourses[0]?.department}</div>
+            </div>
           </div>
-          <div>
-            <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Assigned Course</div>
-            <h2 className="text-xl font-bold text-slate-800">{summary.course.code} - {summary.course.name}</h2>
-            <div className="text-sm font-medium text-slate-600 mt-1">{summary.course.department}</div>
+          <div className="flex flex-wrap gap-2">
+            {lecturerCourses.map((course: any) => (
+              <span key={course.id} className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-sm font-semibold">
+                {course.code} — {course.name}
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -86,30 +100,10 @@ export default function LecturerDashboard() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <StatCard 
-              title="Total Responses" 
-              value={summary.totalEvaluations.toString()} 
-              icon={<Users className="w-6 h-6 text-indigo-600" />}
-              color="bg-indigo-50"
-            />
-            <StatCard 
-              title="Avg Overall" 
-              value={summary.averageOverall.toFixed(1)} 
-              icon={<Star className="w-6 h-6 text-amber-500" />}
-              color="bg-amber-50"
-            />
-            <StatCard 
-              title="Avg Clarity" 
-              value={summary.averageClarity.toFixed(1)} 
-              icon={<BookOpen className="w-6 h-6 text-blue-500" />}
-              color="bg-blue-50"
-            />
-            <StatCard 
-              title="Avg Engagement" 
-              value={summary.averageEngagement.toFixed(1)} 
-              icon={<TrendingUp className="w-6 h-6 text-emerald-500" />}
-              color="bg-emerald-50"
-            />
+            <StatCard title="Total Responses" value={summary.totalEvaluations.toString()} icon={<Users className="w-6 h-6 text-indigo-600" />} color="bg-indigo-50" />
+            <StatCard title="Avg Overall" value={summary.averageOverall.toFixed(1)} icon={<Star className="w-6 h-6 text-amber-500" />} color="bg-amber-50" />
+            <StatCard title="Avg Clarity" value={summary.averageClarity.toFixed(1)} icon={<BookOpen className="w-6 h-6 text-blue-500" />} color="bg-blue-50" />
+            <StatCard title="Avg Engagement" value={summary.averageEngagement.toFixed(1)} icon={<TrendingUp className="w-6 h-6 text-emerald-500" />} color="bg-emerald-50" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -124,10 +118,7 @@ export default function LecturerDashboard() {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontWeight: 500 }} />
                       <YAxis domain={[0, 5]} axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                      <Tooltip 
-                        cursor={{ fill: '#f8fafc' }}
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
-                      />
+                      <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
                       <Bar dataKey="score" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={60} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -143,22 +134,10 @@ export default function LecturerDashboard() {
                 <div className="h-[300px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={pieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={80}
-                        outerRadius={110}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {pieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={80} outerRadius={110} paddingAngle={5} dataKey="value">
+                        {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                       </Pie>
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
-                      />
+                      <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
                       <Legend verticalAlign="bottom" height={36} iconType="circle" />
                     </PieChart>
                   </ResponsiveContainer>
@@ -175,9 +154,7 @@ export default function LecturerDashboard() {
 function StatCard({ title, value, icon, color }: { title: string, value: string, icon: React.ReactNode, color: string }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow flex items-center gap-5">
-      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${color}`}>
-        {icon}
-      </div>
+      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${color}`}>{icon}</div>
       <div>
         <p className="text-sm font-semibold text-slate-500 mb-1">{title}</p>
         <p className="text-3xl font-display font-bold text-slate-900">{value}</p>

@@ -4,6 +4,7 @@ import {
   users,
   courses,
   evaluations,
+  lecturerCourses,
   type User,
   type InsertUser,
   type Course,
@@ -22,6 +23,8 @@ export interface IStorage {
   getCourses(): Promise<Course[]>;
   getCourse(id: number): Promise<Course | undefined>;
   getLecturers(): Promise<(User & { courseCode?: string, courseName?: string })[]>;
+  getLecturerCoursesDetails(lecturerId: number): Promise<Course[]>;
+  setLecturerCourses(lecturerId: number, courseIds: number[]): Promise<void>;
   getEvaluationsByStudent(studentId: number): Promise<Evaluation[]>;
   getEvaluationsByLecturer(lecturerId: number): Promise<Evaluation[]>;
   createEvaluation(evaluation: Omit<Evaluation, 'id' | 'createdAt'>): Promise<Evaluation>;
@@ -53,12 +56,7 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .select()
       .from(users)
-      .where(
-        and(
-          eq(users.resetPasswordToken, token),
-          gt(users.resetPasswordExpiry, new Date())
-        )
-      );
+      .where(and(eq(users.resetPasswordToken, token), gt(users.resetPasswordExpiry, new Date())));
     return user;
   }
 
@@ -81,17 +79,38 @@ export class DatabaseStorage implements IStorage {
     return course;
   }
 
+  // Returns one row per lecturer-course combo (for student dashboard cards)
   async getLecturers(): Promise<(User & { courseCode?: string, courseName?: string })[]> {
     const result = await db.select({
       user: users,
       course: courses,
-    }).from(users).leftJoin(courses, eq(users.courseId, courses.id)).where(eq(users.role, 'lecturer'));
-    
+    })
+    .from(users)
+    .innerJoin(lecturerCourses, eq(users.id, lecturerCourses.lecturerId))
+    .innerJoin(courses, eq(lecturerCourses.courseId, courses.id))
+    .where(eq(users.role, 'lecturer'));
+
     return result.map(r => ({
       ...r.user,
-      courseCode: r.course?.code,
-      courseName: r.course?.name,
+      courseId: r.course.id,
+      courseCode: r.course.code,
+      courseName: r.course.name,
     }));
+  }
+
+  async getLecturerCoursesDetails(lecturerId: number): Promise<Course[]> {
+    const result = await db.select({ course: courses })
+      .from(lecturerCourses)
+      .innerJoin(courses, eq(lecturerCourses.courseId, courses.id))
+      .where(eq(lecturerCourses.lecturerId, lecturerId));
+    return result.map(r => r.course);
+  }
+
+  async setLecturerCourses(lecturerId: number, courseIds: number[]): Promise<void> {
+    await db.delete(lecturerCourses).where(eq(lecturerCourses.lecturerId, lecturerId));
+    if (courseIds.length > 0) {
+      await db.insert(lecturerCourses).values(courseIds.map(courseId => ({ lecturerId, courseId })));
+    }
   }
 
   async getEvaluationsByStudent(studentId: number): Promise<Evaluation[]> {
@@ -109,19 +128,12 @@ export class DatabaseStorage implements IStorage {
 
   async getLecturerSummary(lecturerId: number): Promise<EvaluationSummary> {
     const evals = await this.getEvaluationsByLecturer(lecturerId);
-    
+
     if (evals.length === 0) {
       return {
-        averageOverall: 0,
-        averageClarity: 0,
-        averageEngagement: 0,
-        averageMaterials: 0,
-        averageOrganization: 0,
-        averageFeedback: 0,
-        averagePace: 0,
-        averageSupport: 0,
-        averageFairness: 0,
-        averageRelevance: 0,
+        averageOverall: 0, averageClarity: 0, averageEngagement: 0, averageMaterials: 0,
+        averageOrganization: 0, averageFeedback: 0, averagePace: 0, averageSupport: 0,
+        averageFairness: 0, averageRelevance: 0,
         ratingDistribution: { excellent: 0, good: 0, average: 0, poor: 0 },
         totalEvaluations: 0,
       };
@@ -143,7 +155,6 @@ export class DatabaseStorage implements IStorage {
       sumSupport += e.supportRating;
       sumFairness += e.fairnessRating;
       sumRelevance += e.relevanceRating;
-
       if (e.overallRating === 5) dist.excellent++;
       else if (e.overallRating === 4) dist.good++;
       else if (e.overallRating === 3) dist.average++;
@@ -152,18 +163,12 @@ export class DatabaseStorage implements IStorage {
 
     const count = evals.length;
     return {
-      averageOverall: sumOverall / count,
-      averageClarity: sumClarity / count,
-      averageEngagement: sumEngagement / count,
-      averageMaterials: sumMaterials / count,
-      averageOrganization: sumOrganization / count,
-      averageFeedback: sumFeedback / count,
-      averagePace: sumPace / count,
-      averageSupport: sumSupport / count,
-      averageFairness: sumFairness / count,
-      averageRelevance: sumRelevance / count,
-      ratingDistribution: dist,
-      totalEvaluations: count,
+      averageOverall: sumOverall / count, averageClarity: sumClarity / count,
+      averageEngagement: sumEngagement / count, averageMaterials: sumMaterials / count,
+      averageOrganization: sumOrganization / count, averageFeedback: sumFeedback / count,
+      averagePace: sumPace / count, averageSupport: sumSupport / count,
+      averageFairness: sumFairness / count, averageRelevance: sumRelevance / count,
+      ratingDistribution: dist, totalEvaluations: count,
     };
   }
 }

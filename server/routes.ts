@@ -11,33 +11,28 @@ import crypto from "crypto";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./email";
 import { forgotPasswordSchema, resetPasswordSchema } from "@shared/schema";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
+export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   const { hashPassword } = setupAuth(app);
 
   // === REGISTER ===
   app.post(api.auth.register.path, async (req, res, next) => {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
-      if (existingUser) {
-        return res.status(400).send({ message: "Username already exists" });
-      }
+      if (existingUser) return res.status(400).send({ message: "Username already exists" });
 
       if (req.body.email) {
         const existingEmail = await storage.getUserByEmail(req.body.email);
-        if (existingEmail) {
-          return res.status(400).json({ message: "An account with this email already exists" });
-        }
+        if (existingEmail) return res.status(400).json({ message: "An account with this email already exists" });
       }
 
       const input = api.auth.register.input.parse(req.body);
+      const courseIds: number[] = req.body.courseIds || [];
       const hashedPassword = await hashPassword(input.password);
       const verificationToken = crypto.randomBytes(32).toString("hex");
 
       const user = await storage.createUser({
         ...input,
+        courseId: null, // use junction table instead
         password: hashedPassword,
         email: input.email || "",
         emailVerified: false,
@@ -45,6 +40,11 @@ export async function registerRoutes(
         resetPasswordToken: null,
         resetPasswordExpiry: null,
       });
+
+      // Save multiple courses for lecturers
+      if (input.role === 'lecturer' && courseIds.length > 0) {
+        await storage.setLecturerCourses(user.id, courseIds);
+      }
 
       if (user.email) {
         sendVerificationEmail(user.email, verificationToken, user.name).catch(console.error);
@@ -56,9 +56,7 @@ export async function registerRoutes(
         res.status(201).json(safe);
       });
     } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message });
-      }
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       next(err);
     }
   });
@@ -86,9 +84,7 @@ export async function registerRoutes(
 
   // === ME ===
   app.get(api.auth.me.path, (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     const { password, verificationToken, resetPasswordToken, resetPasswordExpiry, ...safe } = req.user as any;
     res.json(safe);
   });
@@ -97,15 +93,10 @@ export async function registerRoutes(
   app.get("/api/auth/verify-email/:token", async (req, res) => {
     try {
       const user = await storage.getUserByVerificationToken(req.params.token);
-      if (!user) {
-        return res.status(400).json({ message: "Invalid or expired verification link" });
-      }
-      await storage.updateUser(user.id, {
-        emailVerified: true,
-        verificationToken: null,
-      });
+      if (!user) return res.status(400).json({ message: "Invalid or expired verification link" });
+      await storage.updateUser(user.id, { emailVerified: true, verificationToken: null });
       res.json({ message: "Email verified successfully" });
-    } catch (err) {
+    } catch {
       res.status(500).json({ message: "Verification failed" });
     }
   });
@@ -115,22 +106,14 @@ export async function registerRoutes(
     try {
       const { email } = forgotPasswordSchema.parse(req.body);
       const user = await storage.getUserByEmail(email);
-      // Always respond with success to prevent email enumeration
-      if (!user) {
-        return res.json({ message: "If that email exists, a reset link has been sent." });
-      }
+      if (!user) return res.json({ message: "If that email exists, a reset link has been sent." });
       const token = crypto.randomBytes(32).toString("hex");
-      const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-      await storage.updateUser(user.id, {
-        resetPasswordToken: token,
-        resetPasswordExpiry: expiry,
-      });
+      const expiry = new Date(Date.now() + 60 * 60 * 1000);
+      await storage.updateUser(user.id, { resetPasswordToken: token, resetPasswordExpiry: expiry });
       sendPasswordResetEmail(user.email, token, user.name).catch(console.error);
       res.json({ message: "If that email exists, a reset link has been sent." });
     } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message });
-      }
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Something went wrong" });
     }
   });
@@ -140,20 +123,12 @@ export async function registerRoutes(
     try {
       const { token, password } = resetPasswordSchema.parse(req.body);
       const user = await storage.getUserByResetToken(token);
-      if (!user) {
-        return res.status(400).json({ message: "Invalid or expired reset link. Please request a new one." });
-      }
+      if (!user) return res.status(400).json({ message: "Invalid or expired reset link. Please request a new one." });
       const hashed = await hashPassword(password);
-      await storage.updateUser(user.id, {
-        password: hashed,
-        resetPasswordToken: null,
-        resetPasswordExpiry: null,
-      });
+      await storage.updateUser(user.id, { password: hashed, resetPasswordToken: null, resetPasswordExpiry: null });
       res.json({ message: "Password reset successfully. You can now log in." });
     } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message });
-      }
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Something went wrong" });
     }
   });
@@ -167,37 +142,26 @@ export async function registerRoutes(
   // === LECTURERS ===
   app.get(api.lecturers.list.path, async (req, res) => {
     const allLecturers = await storage.getLecturers();
-
     let filtered = allLecturers;
-    // Hard-lock: students only see lecturers in their own department
     if (req.isAuthenticated() && (req.user as any).role === 'student') {
       const studentDept = (req.user as any).department;
-      if (studentDept) {
-        filtered = allLecturers.filter(l => l.department === studentDept);
-      }
+      if (studentDept) filtered = allLecturers.filter(l => l.department === studentDept);
     }
-
     const safe = filtered.map(({ password, verificationToken, resetPasswordToken, resetPasswordExpiry, ...rest }) => rest);
     res.json(safe);
   });
 
   // === EVALUATIONS ===
   app.get(api.evaluations.list.path, async (req, res) => {
-    if (!req.isAuthenticated() || req.user.role !== 'student') {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!req.isAuthenticated() || req.user.role !== 'student') return res.status(401).json({ message: "Unauthorized" });
     const evals = await storage.getEvaluationsByStudent(req.user.id);
     res.json(evals);
   });
 
   app.post(api.evaluations.create.path, async (req, res) => {
-    if (!req.isAuthenticated() || req.user.role !== 'student') {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!req.isAuthenticated() || req.user.role !== 'student') return res.status(401).json({ message: "Unauthorized" });
     try {
       const input = api.evaluations.create.input.parse(req.body);
-
-      // Security: prevent students from evaluating lecturers outside their department
       const studentDept = (req.user as any).department;
       if (studentDept) {
         const allLecturers = await storage.getLecturers();
@@ -206,35 +170,48 @@ export async function registerRoutes(
           return res.status(403).json({ message: "You can only evaluate lecturers in your department" });
         }
       }
-
-      const evalData = await storage.createEvaluation({
-        ...input,
-        studentId: req.user.id,
-      });
+      const evalData = await storage.createEvaluation({ ...input, studentId: req.user.id });
       res.status(201).json(evalData);
     } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message });
-      }
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Internal server error" });
     }
   });
 
   // === LECTURER DASHBOARD ===
   app.get(api.dashboard.lecturerSummary.path, async (req, res) => {
-    if (!req.isAuthenticated() || req.user.role !== 'lecturer') {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!req.isAuthenticated() || req.user.role !== 'lecturer') return res.status(401).json({ message: "Unauthorized" });
     const summary = await storage.getLecturerSummary(req.user.id);
-    let courseInfo = undefined;
-    if (req.user.courseId) {
-      courseInfo = await storage.getCourse(req.user.courseId);
+    const lecturerCoursesData = await storage.getLecturerCoursesDetails(req.user.id);
+    res.json({ ...summary, courses: lecturerCoursesData });
+  });
+
+  // === LECTURER PROFILE - GET COURSES ===
+  app.get("/api/lecturer/courses", async (req, res) => {
+    if (!req.isAuthenticated() || req.user.role !== 'lecturer') return res.status(401).json({ message: "Unauthorized" });
+    const lecturerCoursesData = await storage.getLecturerCoursesDetails(req.user.id);
+    res.json(lecturerCoursesData);
+  });
+
+  // === LECTURER PROFILE - UPDATE ===
+  app.put("/api/lecturer/profile", async (req, res) => {
+    if (!req.isAuthenticated() || req.user.role !== 'lecturer') return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const { department, courseIds } = req.body;
+      if (!department || !Array.isArray(courseIds) || courseIds.length === 0) {
+        return res.status(400).json({ message: "Department and at least one course are required" });
+      }
+      await storage.updateUser(req.user.id, { department });
+      await storage.setLecturerCourses(req.user.id, courseIds);
+      const updated = await storage.getUser(req.user.id);
+      const { password, verificationToken, resetPasswordToken, resetPasswordExpiry, ...safe } = updated!;
+      res.json(safe);
+    } catch {
+      res.status(500).json({ message: "Failed to update profile" });
     }
-    res.json({ ...summary, course: courseInfo });
   });
 
   await seedDatabase();
-
   return httpServer;
 }
 
