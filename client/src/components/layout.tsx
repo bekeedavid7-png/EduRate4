@@ -37,10 +37,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               {user ? (
                 <>
                   <Link 
-                    href={user.role === 'student' ? '/student' : '/lecturer'}
+                    href={user.role === 'student' ? '/student' : user.role === 'admin' ? '/admin' : '/lecturer'}
                     className={cn(
                       "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer",
-                      location.includes(user.role) 
+                      location.includes(user.role === 'admin' ? 'admin' : user.role)
                         ? "bg-primary/10 text-primary" 
                         : "text-muted-foreground hover:text-foreground hover:bg-slate-100"
                     )}

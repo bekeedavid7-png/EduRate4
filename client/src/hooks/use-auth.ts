@@ -37,7 +37,7 @@ export function useAuth() {
     onSuccess: (data) => {
       queryClient.setQueryData([api.auth.me.path], data);
       toast({ title: "Welcome back!", description: `Logged in as ${data.name}` });
-      setLocation(data.role === "student" ? "/student" : "/lecturer");
+      setLocation(data.role === "student" ? "/student" : data.role === "admin" ? "/admin" : "/lecturer");
     },
     onError: (err: Error) => {
       toast({ variant: "destructive", title: "Login Failed", description: err.message });
