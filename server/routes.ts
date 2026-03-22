@@ -11,6 +11,12 @@ import crypto from "crypto";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./email";
 import { forgotPasswordSchema, resetPasswordSchema } from "@shared/schema";
 
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "EDURATE_ADMIN_2024";
+
+function isAdmin(req: any) {
+  return req.isAuthenticated() && req.user.role === 'admin';
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   const { hashPassword } = setupAuth(app);
 
@@ -20,13 +26,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) return res.status(400).send({ message: "Username already exists" });
 
+      // Admin secret key check
+      if (req.body.role === 'admin') {
+        if (req.body.adminSecret !== ADMIN_SECRET) {
+          return res.status(403).json({ message: "Invalid admin secret key" });
+        }
+      }
+
       if (req.body.email) {
-        // Only allow Babcock University email addresses
-        const emailLower = req.body.email.toLowerCase();
-        const allowedDomains = ['@student.babcock.edu.ng', '@babcock.edu.ng'];
-        const isAllowed = allowedDomains.some(domain => emailLower.endsWith(domain));
-        if (!isAllowed) {
-          return res.status(400).json({ message: "Only Babcock University email addresses are allowed (@student.babcock.edu.ng or @babcock.edu.ng)" });
+        // Only allow Babcock University email addresses (skip for admin)
+        if (req.body.role !== 'admin') {
+          const emailLower = req.body.email.toLowerCase();
+          const allowedDomains = ['@student.babcock.edu.ng', '@babcock.edu.ng'];
+          const isAllowed = allowedDomains.some(domain => emailLower.endsWith(domain));
+          if (!isAllowed) {
+            return res.status(400).json({ message: "Only Babcock University email addresses are allowed (@student.babcock.edu.ng or @babcock.edu.ng)" });
+          }
         }
 
         const existingEmail = await storage.getUserByEmail(req.body.email);
@@ -49,7 +64,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         resetPasswordExpiry: null,
       });
 
-      // Save multiple courses for lecturers
       if (input.role === 'lecturer' && courseIds.length > 0) {
         await storage.setLecturerCourses(user.id, courseIds);
       }
@@ -217,6 +231,74 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch {
       res.status(500).json({ message: "Failed to update profile" });
     }
+  });
+
+  // ============================================================
+  // === ADMIN ROUTES ===
+  // ============================================================
+
+  // GET all users
+  app.get("/api/admin/users", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    const allUsers = await storage.getAllUsers();
+    const safe = allUsers.map(({ password, verificationToken, resetPasswordToken, resetPasswordExpiry, ...rest }) => rest);
+    res.json(safe);
+  });
+
+  // DELETE a user
+  app.delete("/api/admin/users/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    const id = parseInt(req.params.id);
+    if ((req.user as any).id === id) return res.status(400).json({ message: "You cannot delete your own account" });
+    await storage.deleteUser(id);
+    res.json({ message: "User deleted" });
+  });
+
+  // GET all courses (admin)
+  app.get("/api/admin/courses", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    const allCourses = await storage.getCourses();
+    res.json(allCourses);
+  });
+
+  // CREATE a course
+  app.post("/api/admin/courses", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    const { department, code, name } = req.body;
+    if (!department || !code || !name) return res.status(400).json({ message: "Department, code and name are required" });
+    const course = await storage.createCourse({ department: department.trim(), code: code.trim().toUpperCase(), name: name.trim() });
+    res.status(201).json(course);
+  });
+
+  // DELETE a course
+  app.delete("/api/admin/courses/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    await storage.deleteCourse(parseInt(req.params.id));
+    res.json({ message: "Course deleted" });
+  });
+
+  // GET all evaluations (admin)
+  app.get("/api/admin/evaluations", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    const allEvals = await storage.getAllEvaluations();
+    const allUsers = await storage.getAllUsers();
+    const allCourses = await storage.getCourses();
+
+    const enriched = allEvals.map(e => ({
+      ...e,
+      studentName: allUsers.find(u => u.id === e.studentId)?.name || "Unknown",
+      lecturerName: allUsers.find(u => u.id === e.lecturerId)?.name || "Unknown",
+      courseName: allCourses.find(c => c.id === e.courseId)?.name || "Unknown",
+      courseCode: allCourses.find(c => c.id === e.courseId)?.code || "Unknown",
+    }));
+    res.json(enriched);
+  });
+
+  // DELETE an evaluation
+  app.delete("/api/admin/evaluations/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    await storage.deleteEvaluation(parseInt(req.params.id));
+    res.json({ message: "Evaluation deleted" });
   });
 
   await seedDatabase();
