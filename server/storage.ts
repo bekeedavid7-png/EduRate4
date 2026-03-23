@@ -5,6 +5,22 @@ import {
   type User, type InsertUser, type Course, type Evaluation, type EvaluationSummary
 } from "@shared/schema";
 
+export interface CourseSummary {
+  course: Course;
+  totalEvaluations: number;
+  averageOverall: number;
+  averageClarity: number;
+  averageEngagement: number;
+  averageMaterials: number;
+  averageOrganization: number;
+  averageFeedback: number;
+  averagePace: number;
+  averageSupport: number;
+  averageFairness: number;
+  averageRelevance: number;
+  comments: string[];
+}
+
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -19,7 +35,7 @@ export interface IStorage {
   getCourse(id: number): Promise<Course | undefined>;
   createCourse(course: { department: string; code: string; name: string }): Promise<Course>;
   deleteCourse(id: number): Promise<void>;
-  getLecturers(): Promise<(User & { courseCode?: string, courseName?: string })[]>;
+  getLecturers(): Promise<(User & { courseCode?: string, courseName?: string, courseId?: number })[]>;
   getLecturerCoursesDetails(lecturerId: number): Promise<Course[]>;
   setLecturerCourses(lecturerId: number, courseIds: number[]): Promise<void>;
   getEvaluationsByStudent(studentId: number): Promise<Evaluation[]>;
@@ -27,7 +43,7 @@ export interface IStorage {
   getAllEvaluations(): Promise<Evaluation[]>;
   createEvaluation(evaluation: Omit<Evaluation, 'id' | 'createdAt'>): Promise<Evaluation>;
   deleteEvaluation(id: number): Promise<void>;
-  getLecturerSummary(lecturerId: number): Promise<EvaluationSummary>;
+  getLecturerSummary(lecturerId: number): Promise<EvaluationSummary & { courseBreakdowns: CourseSummary[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -96,7 +112,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(courses).where(eq(courses.id, id));
   }
 
-  async getLecturers(): Promise<(User & { courseCode?: string, courseName?: string })[]> {
+  async getLecturers(): Promise<(User & { courseCode?: string, courseName?: string, courseId?: number })[]> {
     const result = await db.select({ user: users, course: courses })
       .from(users)
       .innerJoin(lecturerCourses, eq(users.id, lecturerCourses.lecturerId))
@@ -147,18 +163,10 @@ export class DatabaseStorage implements IStorage {
     await db.delete(evaluations).where(eq(evaluations.id, id));
   }
 
-  async getLecturerSummary(lecturerId: number): Promise<EvaluationSummary> {
-    const evals = await this.getEvaluationsByLecturer(lecturerId);
-
-    if (evals.length === 0) {
-      return {
-        averageOverall: 0, averageClarity: 0, averageEngagement: 0, averageMaterials: 0,
-        averageOrganization: 0, averageFeedback: 0, averagePace: 0, averageSupport: 0,
-        averageFairness: 0, averageRelevance: 0,
-        ratingDistribution: { excellent: 0, good: 0, average: 0, poor: 0 },
-        totalEvaluations: 0,
-      };
-    }
+  // Helper to compute summary stats for a list of evaluations
+  private computeSummary(evals: Evaluation[]) {
+    const count = evals.length;
+    if (count === 0) return null;
 
     let sumOverall = 0, sumClarity = 0, sumEngagement = 0, sumMaterials = 0;
     let sumOrganization = 0, sumFeedback = 0, sumPace = 0, sumSupport = 0;
@@ -177,15 +185,72 @@ export class DatabaseStorage implements IStorage {
       else dist.poor++;
     }
 
-    const count = evals.length;
     return {
-      averageOverall: sumOverall / count, averageClarity: sumClarity / count,
-      averageEngagement: sumEngagement / count, averageMaterials: sumMaterials / count,
-      averageOrganization: sumOrganization / count, averageFeedback: sumFeedback / count,
-      averagePace: sumPace / count, averageSupport: sumSupport / count,
-      averageFairness: sumFairness / count, averageRelevance: sumRelevance / count,
-      ratingDistribution: dist, totalEvaluations: count,
+      averageOverall: sumOverall / count,
+      averageClarity: sumClarity / count,
+      averageEngagement: sumEngagement / count,
+      averageMaterials: sumMaterials / count,
+      averageOrganization: sumOrganization / count,
+      averageFeedback: sumFeedback / count,
+      averagePace: sumPace / count,
+      averageSupport: sumSupport / count,
+      averageFairness: sumFairness / count,
+      averageRelevance: sumRelevance / count,
+      ratingDistribution: dist,
+      totalEvaluations: count,
     };
+  }
+
+  async getLecturerSummary(lecturerId: number): Promise<EvaluationSummary & { courseBreakdowns: CourseSummary[] }> {
+    const [allEvals, assignedCourses] = await Promise.all([
+      this.getEvaluationsByLecturer(lecturerId),
+      this.getLecturerCoursesDetails(lecturerId),
+    ]);
+
+    const empty: EvaluationSummary & { courseBreakdowns: CourseSummary[] } = {
+      averageOverall: 0, averageClarity: 0, averageEngagement: 0, averageMaterials: 0,
+      averageOrganization: 0, averageFeedback: 0, averagePace: 0, averageSupport: 0,
+      averageFairness: 0, averageRelevance: 0,
+      ratingDistribution: { excellent: 0, good: 0, average: 0, poor: 0 },
+      totalEvaluations: 0,
+      courseBreakdowns: assignedCourses.map(course => ({
+        course,
+        totalEvaluations: 0,
+        averageOverall: 0, averageClarity: 0, averageEngagement: 0, averageMaterials: 0,
+        averageOrganization: 0, averageFeedback: 0, averagePace: 0, averageSupport: 0,
+        averageFairness: 0, averageRelevance: 0,
+        comments: [],
+      })),
+    };
+
+    if (allEvals.length === 0) return empty;
+
+    // Overall summary
+    const overall = this.computeSummary(allEvals)!;
+
+    // Per-course breakdown — one entry per assigned course (even if no evals yet)
+    const courseBreakdowns: CourseSummary[] = assignedCourses.map(course => {
+      const courseEvals = allEvals.filter(e => e.courseId === course.id);
+      const stats = this.computeSummary(courseEvals);
+
+      return {
+        course,
+        totalEvaluations: courseEvals.length,
+        averageOverall: stats?.averageOverall ?? 0,
+        averageClarity: stats?.averageClarity ?? 0,
+        averageEngagement: stats?.averageEngagement ?? 0,
+        averageMaterials: stats?.averageMaterials ?? 0,
+        averageOrganization: stats?.averageOrganization ?? 0,
+        averageFeedback: stats?.averageFeedback ?? 0,
+        averagePace: stats?.averagePace ?? 0,
+        averageSupport: stats?.averageSupport ?? 0,
+        averageFairness: stats?.averageFairness ?? 0,
+        averageRelevance: stats?.averageRelevance ?? 0,
+        comments: courseEvals.filter(e => e.comments).map(e => e.comments as string),
+      };
+    });
+
+    return { ...overall, courseBreakdowns };
   }
 }
 

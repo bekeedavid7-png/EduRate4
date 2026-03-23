@@ -26,6 +26,29 @@ const userResponseSchema = z.object({
   courseId: z.number().nullable(),
 });
 
+const courseSchema = z.object({
+  id: z.number(),
+  department: z.string(),
+  code: z.string(),
+  name: z.string(),
+});
+
+const courseSummarySchema = z.object({
+  course: courseSchema,
+  totalEvaluations: z.number(),
+  averageOverall: z.number(),
+  averageClarity: z.number(),
+  averageEngagement: z.number(),
+  averageMaterials: z.number(),
+  averageOrganization: z.number(),
+  averageFeedback: z.number(),
+  averagePace: z.number(),
+  averageSupport: z.number(),
+  averageFairness: z.number(),
+  averageRelevance: z.number(),
+  comments: z.array(z.string()),
+});
+
 export const api = {
   auth: {
     login: {
@@ -76,7 +99,6 @@ export const api = {
       method: 'GET' as const,
       path: '/api/lecturers' as const,
       responses: {
-        // Return lecturers with their course info
         200: z.array(z.object({
           id: z.number(),
           name: z.string(),
@@ -130,7 +152,8 @@ export const api = {
             poor: z.number(),
           }),
           totalEvaluations: z.number(),
-          course: z.custom<typeof courses.$inferSelect>().optional(),
+          // ✅ Per-course breakdown — one entry per assigned course
+          courseBreakdowns: z.array(courseSummarySchema),
         }),
         401: errorSchemas.unauthorized,
       },

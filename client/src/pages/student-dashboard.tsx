@@ -18,15 +18,17 @@ export default function StudentDashboard() {
   const { pending, completed } = useMemo(() => {
     if (!lecturers || !evaluations || !user) return { pending: [], completed: [] };
 
-    // API already filters lecturers to student's department — no client-side filter needed
+    // ✅ FIX: Check lecturerId + courseId so each course is tracked independently
     const pendingList = lecturers.filter(
-      l => !evaluations.some(e => e.lecturerId === l.id && e.studentId === user.id)
+      l => !evaluations.some(
+        e => e.lecturerId === l.id && e.courseId === l.courseId && e.studentId === user.id
+      )
     );
 
     const completedList = evaluations
       .filter(e => e.studentId === user.id)
       .map(e => {
-        const lecturer = lecturers.find(l => l.id === e.lecturerId);
+        const lecturer = lecturers.find(l => l.id === e.lecturerId && l.courseId === e.courseId);
         return {
           ...e,
           lecturerName: lecturer?.name || "Unknown Lecturer",
@@ -84,7 +86,7 @@ export default function StudentDashboard() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {pending.map(lecturer => (
-                  <div key={lecturer.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
+                  <div key={`${lecturer.id}-${lecturer.courseId}`} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
                     <div className="mb-4 flex-1">
                       <div className="inline-block px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold tracking-wide mb-3">
                         {lecturer.department}
