@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { useCourses } from "@/hooks/use-courses";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -20,8 +22,12 @@ export default function LecturerProfile() {
   const queryClient = useQueryClient();
 
   const [department, setDepartment] = useState("");
+  const [name, setName] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [selectedCourseIds, setSelectedCourseIds] = useState<number[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
 
   // Fetch lecturer's current courses
   const { data: currentCourses, isLoading: isLoadingCurrentCourses } = useQuery({
@@ -36,6 +42,7 @@ export default function LecturerProfile() {
 
   // Pre-fill form when data loads
   useEffect(() => {
+    if (user?.name) setName(user.name);
     if (user?.department) setDepartment(user.department);
     if (currentCourses && currentCourses.length > 0) {
       setSelectedCourseIds(currentCourses.map(c => c.id));
@@ -98,6 +105,41 @@ export default function LecturerProfile() {
     }
   };
 
+  const handleSaveAccount = async () => {
+    setIsSavingAccount(true);
+    try {
+      const payload: Record<string, string> = {};
+      if (name.trim() && name.trim() !== user?.name) payload.name = name.trim();
+      if (newPassword) {
+        payload.currentPassword = currentPassword;
+        payload.newPassword = newPassword;
+      }
+
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to update account");
+
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Account updated", description: "Your name and password settings were saved." });
+      setCurrentPassword("");
+      setNewPassword("");
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+      });
+    } finally {
+      setIsSavingAccount(false);
+    }
+  };
+
   const isLoading = isAuthLoading || isLoadingCourses || isLoadingCurrentCourses;
 
   if (isLoading) {
@@ -113,6 +155,7 @@ export default function LecturerProfile() {
 
   return (
     <Layout>
+      <DashboardShell>
       <div className="max-w-xl mx-auto">
         <Link href="/lecturer" className="inline-flex items-center text-sm text-slate-500 hover:text-primary mb-8 transition-colors cursor-pointer">
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Dashboard
@@ -143,6 +186,31 @@ export default function LecturerProfile() {
             </div>
 
             <div className="space-y-6">
+              <div className="space-y-4 rounded-2xl border border-slate-200 p-4 bg-slate-50/60">
+                <h2 className="text-sm font-semibold text-slate-700">Account Settings</h2>
+                <div className="space-y-2">
+                  <Label>Full Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl bg-white" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Current Password</Label>
+                  <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="rounded-xl bg-white" />
+                </div>
+                <div className="space-y-2">
+                  <Label>New Password</Label>
+                  <Input type="password" minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="rounded-xl bg-white" />
+                </div>
+                <Button
+                  onClick={handleSaveAccount}
+                  disabled={isSavingAccount}
+                  variant="outline"
+                  className="w-full rounded-xl"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSavingAccount ? "Saving Account..." : "Save Account Details"}
+                </Button>
+              </div>
+
               {/* Department */}
               <div className="space-y-2">
                 <Label>Department</Label>
@@ -201,6 +269,7 @@ export default function LecturerProfile() {
           </div>
         </motion.div>
       </div>
+      </DashboardShell>
     </Layout>
   );
 }

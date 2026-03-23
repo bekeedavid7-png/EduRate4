@@ -73,5 +73,5 @@ export function setupAuth(app: Express) {
     }
   });
 
-  return { hashPassword };
+  return { hashPassword, comparePasswords };
 }

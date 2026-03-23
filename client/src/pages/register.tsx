@@ -23,6 +23,8 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [school, setSchool] = useState("");
+  const [matriculationNumber, setMatriculationNumber] = useState("");
   const [department, setDepartment] = useState("");
   const [studentDepartment, setStudentDepartment] = useState("");
   const [selectedCourseIds, setSelectedCourseIds] = useState<number[]>([]);
@@ -57,6 +59,8 @@ export default function Register() {
       await register({
         username, password, email, role, name,
         department: role === 'lecturer' ? department : role === 'student' ? studentDepartment : undefined,
+        school: role === 'lecturer' ? school : undefined,
+        matriculationNumber: role === 'student' ? matriculationNumber : undefined,
         courseIds: role === 'lecturer' ? selectedCourseIds : undefined,
         adminSecret: role === 'admin' ? adminSecret : undefined,
       } as any);
@@ -93,8 +97,8 @@ export default function Register() {
     );
   }
 
-  const isLecturerValid = role === 'lecturer' && department && selectedCourseIds.length > 0;
-  const isStudentValid = role === 'student' && studentDepartment;
+  const isLecturerValid = role === 'lecturer' && department && selectedCourseIds.length > 0 && school;
+  const isStudentValid = role === 'student' && studentDepartment && matriculationNumber;
   const isAdminValid = role === 'admin' && adminSecret;
   const isSubmitDisabled = isRegistering || isLoadingCourses || !(isLecturerValid || isStudentValid || isAdminValid);
 
@@ -156,19 +160,32 @@ export default function Register() {
                 <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} className="px-4 py-5 rounded-xl bg-slate-50/50" placeholder="Min. 8 characters" />
               </div>
 
+              {role === 'lecturer' && (
+                <div className="space-y-2">
+                  <Label>School / Faculty</Label>
+                  <Input value={school} onChange={e => setSchool(e.target.value)} required className="px-4 py-5 rounded-xl bg-slate-50/50" placeholder="e.g. School of Computing & Engineering" />
+                </div>
+              )}
+
               {/* STUDENT */}
               {role === 'student' && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-2 border-t border-slate-100">
-                  <Label>Your Department</Label>
-                  <p className="text-xs text-slate-400">Cannot be changed after registration.</p>
-                  <Select value={studentDepartment} onValueChange={setStudentDepartment}>
-                    <SelectTrigger className="py-5 rounded-xl bg-slate-50/50">
-                      <SelectValue placeholder="Select your department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 pt-2 border-t border-slate-100">
+                  <div className="space-y-2">
+                    <Label>Matriculation Number</Label>
+                    <Input value={matriculationNumber} onChange={e => setMatriculationNumber(e.target.value)} required className="px-4 py-5 rounded-xl bg-slate-50/50" placeholder="e.g. 22/54321" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Your Department</Label>
+                    <p className="text-xs text-slate-400">Cannot be changed after registration.</p>
+                    <Select value={studentDepartment} onValueChange={setStudentDepartment}>
+                      <SelectTrigger className="py-5 rounded-xl bg-slate-50/50">
+                        <SelectValue placeholder="Select your department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </motion.div>
               )}
 

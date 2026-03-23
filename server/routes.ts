@@ -9,7 +9,7 @@ import { db } from "./db";
 import passport from "passport";
 import crypto from "crypto";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./email";
-import { forgotPasswordSchema, resetPasswordSchema } from "@shared/schema";
+import { forgotPasswordSchema, resetPasswordSchema, insertEvaluationPeriodSchema, updateEvaluationPeriodSchema, insertEvaluationCriterionSchema, updateEvaluationCriterionSchema } from "@shared/schema";
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "EDURATE_ADMIN_2024";
 
@@ -18,7 +18,7 @@ function isAdmin(req: any) {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  const { hashPassword } = setupAuth(app);
+  const { hashPassword, comparePasswords } = setupAuth(app);
 
   // === REGISTER ===
   app.post(api.auth.register.path, async (req, res, next) => {
@@ -111,6 +111,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(safe);
   });
 
+  // === PROFILE UPDATE (student/lecturer) ===
+  app.put("/api/profile", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    if (req.user.role !== "student" && req.user.role !== "lecturer") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const schema = z.object({
+      name: z.string().min(2).optional(),
+      currentPassword: z.string().optional(),
+      newPassword: z.string().min(8, "New password must be at least 8 characters").optional(),
+    });
+
+    try {
+      const input = schema.parse(req.body);
+      const updates: Record<string, unknown> = {};
+
+      if (input.name && input.name.trim() !== req.user.name) {
+        updates.name = input.name.trim();
+      }
+
+      if (input.newPassword) {
+        if (!input.currentPassword) {
+          return res.status(400).json({ message: "Current password is required to set a new password." });
+        }
+        const validCurrent = await comparePasswords(input.currentPassword, req.user.password);
+        if (!validCurrent) {
+          return res.status(400).json({ message: "Current password is incorrect." });
+        }
+        updates.password = await hashPassword(input.newPassword);
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: "No changes were provided." });
+      }
+
+      const updated = await storage.updateUser(req.user.id, updates as any);
+      const { password, verificationToken, resetPasswordToken, resetPasswordExpiry, ...safe } = updated;
+      res.json(safe);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
   // === VERIFY EMAIL ===
   app.get("/api/auth/verify-email/:token", async (req, res) => {
     try {
@@ -183,6 +228,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.evaluations.create.path, async (req, res) => {
     if (!req.isAuthenticated() || req.user.role !== 'student') return res.status(401).json({ message: "Unauthorized" });
     try {
+      const activePeriod = await storage.getActiveEvaluationPeriod();
+      if (!activePeriod) {
+        return res.status(403).json({ message: "Evaluations are currently closed. No active evaluation period is set." });
+      }
+
       const input = api.evaluations.create.input.parse(req.body);
       const studentDept = (req.user as any).department;
       if (studentDept) {
@@ -192,7 +242,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           return res.status(403).json({ message: "You can only evaluate lecturers in your department" });
         }
       }
-      const evalData = await storage.createEvaluation({ ...input, studentId: req.user.id });
+
+      // Duplicate submission prevention
+      const alreadySubmitted = await storage.hasStudentEvaluatedLecturerInPeriod(
+        req.user.id, input.lecturerId, input.courseId, activePeriod.id
+      );
+      if (alreadySubmitted) {
+        return res.status(409).json({ message: "You have already submitted an evaluation for this lecturer and course." });
+      }
+
+      const evalData = await storage.createEvaluation({
+        ...input,
+        materialsRating: input.materialsRating ?? 0,
+        organizationRating: input.organizationRating ?? 0,
+        feedbackRating: input.feedbackRating ?? 0,
+        paceRating: input.paceRating ?? 0,
+        supportRating: input.supportRating ?? 0,
+        fairnessRating: input.fairnessRating ?? 0,
+        relevanceRating: input.relevanceRating ?? 0,
+        comments: input.comments ?? null,
+        studentId: req.user.id,
+      });
       res.status(201).json(evalData);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -200,10 +270,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // === ACTIVE EVALUATION PERIOD ===
+  app.get(api.evaluationPeriods.active.path, async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const activePeriod = await storage.getActiveEvaluationPeriod();
+    res.json(activePeriod ?? null);
+  });
+
   // === LECTURER DASHBOARD ===
   app.get(api.dashboard.lecturerSummary.path, async (req, res) => {
     if (!req.isAuthenticated() || req.user.role !== 'lecturer') return res.status(401).json({ message: "Unauthorized" });
-    const summary = await storage.getLecturerSummary(req.user.id);
+    const courseIdParam = req.query.courseId ? parseInt(req.query.courseId as string) : undefined;
+    const summary = await storage.getLecturerSummary(req.user.id, courseIdParam);
     const lecturerCoursesData = await storage.getLecturerCoursesDetails(req.user.id);
     res.json({ ...summary, courses: lecturerCoursesData });
   });
@@ -299,6 +377,125 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
     await storage.deleteEvaluation(parseInt(req.params.id));
     res.json({ message: "Evaluation deleted" });
+  });
+
+  // GET all evaluation periods (admin)
+  app.get(api.admin.evaluationPeriods.list.path, async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    const periods = await storage.getEvaluationPeriods();
+    res.json(periods);
+  });
+
+  // CREATE evaluation period (admin)
+  app.post(api.admin.evaluationPeriods.create.path, async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    try {
+      const input = insertEvaluationPeriodSchema.parse(req.body);
+      const created = await storage.createEvaluationPeriod({
+        name: input.name,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        isActive: input.isActive ?? true,
+      });
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to create evaluation period" });
+    }
+  });
+
+  // UPDATE evaluation period (admin)
+  app.put("/api/admin/evaluation-periods/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    try {
+      const periodId = parseInt(req.params.id, 10);
+      const input = updateEvaluationPeriodSchema.parse(req.body);
+      const updated = await storage.updateEvaluationPeriod(periodId, input);
+      if (!updated) return res.status(404).json({ message: "Evaluation period not found" });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update evaluation period" });
+    }
+  });
+
+  // DELETE evaluation period (admin)
+  app.delete("/api/admin/evaluation-periods/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    await storage.deleteEvaluationPeriod(parseInt(req.params.id, 10));
+    res.json({ message: "Evaluation period deleted" });
+  });
+
+  // === EVALUATION CRITERIA (admin) ===
+  app.get("/api/admin/criteria", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    const criteria = await storage.getEvaluationCriteria();
+    res.json(criteria);
+  });
+
+  app.post("/api/admin/criteria", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    try {
+      const input = insertEvaluationCriterionSchema.parse(req.body);
+      const created = await storage.createEvaluationCriterion({
+        ...input,
+        isActive: input.isActive ?? true,
+        sortOrder: input.sortOrder ?? 0,
+      });
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to create criterion" });
+    }
+  });
+
+  app.put("/api/admin/criteria/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    try {
+      const input = updateEvaluationCriterionSchema.parse(req.body);
+      const updated = await storage.updateEvaluationCriterion(parseInt(req.params.id, 10), input);
+      if (!updated) return res.status(404).json({ message: "Criterion not found" });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update criterion" });
+    }
+  });
+
+  app.delete("/api/admin/criteria/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    await storage.deleteEvaluationCriterion(parseInt(req.params.id, 10));
+    res.json({ message: "Criterion deleted" });
+  });
+
+  // === ADMIN ANALYTICS SUMMARY (for admin report export / charts) ===
+  app.get("/api/admin/analytics", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    const allEvals = await storage.getAllEvaluations();
+    const allUsers = await storage.getAllUsers();
+    const allCourses = await storage.getCourses();
+
+    // Per-lecturer aggregated summary
+    const lecturers = allUsers.filter(u => u.role === 'lecturer');
+    const summary = await Promise.all(lecturers.map(async (lec) => {
+      const stats = await storage.getLecturerSummary(lec.id);
+      const lecCourses = await storage.getLecturerCoursesDetails(lec.id);
+      return {
+        lecturerId: lec.id,
+        lecturerName: lec.name,
+        department: lec.department,
+        courses: lecCourses.map(c => c.code).join(', '),
+        ...stats,
+      };
+    }));
+
+    res.json({
+      totalEvaluations: allEvals.length,
+      totalLecturers: lecturers.length,
+      totalStudents: allUsers.filter(u => u.role === 'student').length,
+      totalCourses: allCourses.length,
+      perLecturer: summary,
+    });
   });
 
   await seedDatabase();

@@ -1,17 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/layout";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { useLecturerSummary } from "@/hooks/use-dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { BookOpen, Users, Star, TrendingUp, UserCog } from "lucide-react";
+import { BookOpen, Users, Star, TrendingUp, UserCog, Download, Filter } from "lucide-react";
 
 export default function LecturerDashboard() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const [, setLocation] = useLocation();
-  const { data: summary, isLoading: isSummaryLoading } = useLecturerSummary();
+  const [selectedCourseId, setSelectedCourseId] = useState<number | undefined>(undefined);
+  const { data: summary, isLoading: isSummaryLoading } = useLecturerSummary(selectedCourseId);
 
   useEffect(() => {
     if (!isAuthLoading && (!user || user.role !== 'lecturer')) setLocation('/login');
@@ -31,6 +34,100 @@ export default function LecturerDashboard() {
   }
 
   if (!summary) return null;
+
+  const exportCsv = () => {
+    const lecturerCourses = (summary as any).courses || [];
+    const rows = [
+      ["Metric", "Value"],
+      ["Average Overall", summary.averageOverall.toFixed(2)],
+      ["Median Overall", summary.medianOverall.toFixed(2)],
+      ["Mode Overall", String(summary.modeOverall)],
+      ["Average Clarity", summary.averageClarity.toFixed(2)],
+      ["Average Engagement", summary.averageEngagement.toFixed(2)],
+      ["Average Materials", summary.averageMaterials.toFixed(2)],
+      ["Average Organization", summary.averageOrganization.toFixed(2)],
+      ["Average Feedback", summary.averageFeedback.toFixed(2)],
+      ["Average Pace", summary.averagePace.toFixed(2)],
+      ["Average Support", summary.averageSupport.toFixed(2)],
+      ["Average Fairness", summary.averageFairness.toFixed(2)],
+      ["Average Relevance", summary.averageRelevance.toFixed(2)],
+      ["Total Evaluations", String(summary.totalEvaluations)],
+      ["Excellent (5)", String(summary.ratingDistribution.excellent)],
+      ["Good (4)", String(summary.ratingDistribution.good)],
+      ["Average (3)", String(summary.ratingDistribution.average)],
+      ["Poor (1-2)", String(summary.ratingDistribution.poor)],
+      ["", ""],
+      ["Assigned Courses", ""],
+      ["Code", "Name"],
+      ...lecturerCourses.map((course: any) => [course.code, course.name]),
+    ];
+
+    const csvContent = rows
+      .map((row: string[]) => row.map((value: string) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `lecturer-analytics-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPdf = async () => {
+    const { jsPDF } = await import("jspdf");
+    const lecturerCourses = (summary as any).courses || [];
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text("Lecturer Analytics Report", 14, 16);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+    let y = 32;
+    const line = (label: string, value: string) => {
+      doc.text(`${label}: ${value}`, 14, y);
+      y += 6;
+    };
+
+    line("Average Overall", summary.averageOverall.toFixed(2));
+    line("Median Overall", summary.medianOverall.toFixed(2));
+    line("Mode Overall", String(summary.modeOverall));
+    line("Average Clarity", summary.averageClarity.toFixed(2));
+    line("Average Engagement", summary.averageEngagement.toFixed(2));
+    line("Average Materials", summary.averageMaterials.toFixed(2));
+    line("Average Organization", summary.averageOrganization.toFixed(2));
+    line("Average Feedback", summary.averageFeedback.toFixed(2));
+    line("Average Pace", summary.averagePace.toFixed(2));
+    line("Average Support", summary.averageSupport.toFixed(2));
+    line("Average Fairness", summary.averageFairness.toFixed(2));
+    line("Average Relevance", summary.averageRelevance.toFixed(2));
+    line("Total Evaluations", String(summary.totalEvaluations));
+    line("Excellent (5)", String(summary.ratingDistribution.excellent));
+    line("Good (4)", String(summary.ratingDistribution.good));
+    line("Average (3)", String(summary.ratingDistribution.average));
+    line("Poor (1-2)", String(summary.ratingDistribution.poor));
+
+    y += 4;
+    doc.setFontSize(12);
+    doc.text("Assigned Courses", 14, y);
+    y += 7;
+    doc.setFontSize(10);
+
+    for (const course of lecturerCourses) {
+      if (y > 280) {
+        doc.addPage();
+        y = 16;
+      }
+      doc.text(`${course.code} - ${course.name}`, 14, y);
+      y += 6;
+    }
+
+    doc.save(`lecturer-analytics-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
 
   const barData = [
     { name: 'Overall', score: summary.averageOverall },
@@ -56,17 +153,45 @@ export default function LecturerDashboard() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-8">
+      <DashboardShell>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-display font-bold text-slate-900">Lecturer Dashboard</h1>
           <p className="text-slate-500 mt-1">Analytics and feedback summary</p>
         </div>
-        <Link href="/lecturer/profile">
-          <Button variant="outline" className="flex items-center gap-2 rounded-xl border-slate-200">
-            <UserCog className="w-4 h-4" />
-            Edit Profile
+        <div className="flex flex-wrap items-center gap-2">
+          {lecturerCourses.length > 1 && (
+            <Select
+              value={selectedCourseId?.toString() ?? "all"}
+              onValueChange={val => setSelectedCourseId(val === "all" ? undefined : parseInt(val))}
+            >
+              <SelectTrigger className="w-52 rounded-xl border-slate-200">
+                <Filter className="w-4 h-4 mr-1 text-slate-400" />
+                <SelectValue placeholder="All Courses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Courses</SelectItem>
+                {lecturerCourses.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id.toString()}>{c.code} — {c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button variant="outline" onClick={exportCsv} className="flex items-center gap-2 rounded-xl border-slate-200">
+            <Download className="w-4 h-4" />
+            Export CSV
           </Button>
-        </Link>
+          <Button variant="outline" onClick={exportPdf} className="flex items-center gap-2 rounded-xl border-slate-200">
+            <Download className="w-4 h-4" />
+            Export PDF
+          </Button>
+          <Link href="/lecturer/profile">
+            <Button variant="outline" className="flex items-center gap-2 rounded-xl border-slate-200">
+              <UserCog className="w-4 h-4" />
+              Edit Profile
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Assigned Courses */}
@@ -102,8 +227,8 @@ export default function LecturerDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard title="Total Responses" value={summary.totalEvaluations.toString()} icon={<Users className="w-6 h-6 text-indigo-600" />} color="bg-indigo-50" />
             <StatCard title="Avg Overall" value={summary.averageOverall.toFixed(1)} icon={<Star className="w-6 h-6 text-amber-500" />} color="bg-amber-50" />
-            <StatCard title="Avg Clarity" value={summary.averageClarity.toFixed(1)} icon={<BookOpen className="w-6 h-6 text-blue-500" />} color="bg-blue-50" />
-            <StatCard title="Avg Engagement" value={summary.averageEngagement.toFixed(1)} icon={<TrendingUp className="w-6 h-6 text-emerald-500" />} color="bg-emerald-50" />
+            <StatCard title="Median Overall" value={summary.medianOverall.toFixed(1)} icon={<TrendingUp className="w-6 h-6 text-emerald-500" />} color="bg-emerald-50" />
+            <StatCard title="Mode Overall" value={summary.modeOverall.toString()} icon={<BookOpen className="w-6 h-6 text-blue-500" />} color="bg-blue-50" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -147,6 +272,7 @@ export default function LecturerDashboard() {
           </div>
         </>
       )}
+      </DashboardShell>
     </Layout>
   );
 }

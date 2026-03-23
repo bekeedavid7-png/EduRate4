@@ -8,6 +8,7 @@ import { StarRating } from "@/components/ui/star-rating";
 import { useAuth } from "@/hooks/use-auth";
 import { useCreateEvaluation } from "@/hooks/use-evaluations";
 import { useLecturers } from "@/hooks/use-lecturers";
+import { useActiveEvaluationPeriod } from "@/hooks/use-evaluation-periods";
 import { ArrowLeft, BookOpen, User } from "lucide-react";
 import { Link } from "wouter";
 
@@ -16,6 +17,7 @@ export default function Evaluate() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { data: lecturers, isLoading: isLecturersLoading } = useLecturers();
+  const { data: activePeriod, isLoading: isPeriodLoading } = useActiveEvaluationPeriod();
   const createMutation = useCreateEvaluation();
 
   const [overallRating, setOverallRating] = useState(0);
@@ -41,7 +43,7 @@ export default function Evaluate() {
 
   const targetLecturer = lecturers?.find(l => l.id === lecturerId && l.courseId === courseId);
 
-  if (isAuthLoading || isLecturersLoading) {
+  if (isAuthLoading || isLecturersLoading || isPeriodLoading) {
     return <Layout><div className="flex justify-center p-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div></Layout>;
   }
 
@@ -59,10 +61,11 @@ export default function Evaluate() {
   const isFormValid = overallRating > 0 && clarityRating > 0 && engagementRating > 0 && 
                       materialsRating > 0 && organizationRating > 0 && feedbackRating > 0 && 
                       paceRating > 0 && supportRating > 0 && fairnessRating > 0 && relevanceRating > 0;
+  const canSubmit = !!activePeriod;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
+    if (!isFormValid || !canSubmit) return;
 
     await createMutation.mutateAsync({
       lecturerId,
@@ -115,6 +118,18 @@ export default function Evaluate() {
           </div>
 
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
+            {!canSubmit && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
+                Evaluations are currently closed. Your admin has not opened an active evaluation period.
+              </div>
+            )}
+
+            {canSubmit && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm">
+                Active period: <span className="font-semibold">{(activePeriod as any).name}</span> ({new Date((activePeriod as any).startDate).toLocaleString()} - {new Date((activePeriod as any).endDate).toLocaleString()})
+              </div>
+            )}
+
             <div className="grid gap-8 sm:grid-cols-1">
               <RatingSection 
                 title="Overall Performance" 
@@ -203,7 +218,7 @@ export default function Evaluate() {
             <div className="pt-4 flex justify-end">
               <Button 
                 type="submit" 
-                disabled={!isFormValid || createMutation.isPending}
+                disabled={!isFormValid || createMutation.isPending || !canSubmit}
                 className="px-8 py-6 rounded-xl text-md font-semibold bg-gradient-to-r from-primary to-indigo-600 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
               >
                 {createMutation.isPending ? "Submitting..." : "Submit Evaluation"}

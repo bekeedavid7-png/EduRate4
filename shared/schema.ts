@@ -24,6 +24,8 @@ export const users = pgTable("users", {
   resetPasswordToken: text("reset_password_token"),
   resetPasswordExpiry: timestamp("reset_password_expiry"),
   department: text("department"),
+  school: text("school"),
+  matriculationNumber: text("matriculation_number"),
   courseId: integer("course_id").references(() => courses.id),
 });
 
@@ -51,6 +53,29 @@ export const evaluations = pgTable("evaluations", {
   comments: text("comments"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const evaluationPeriods = pgTable("evaluation_periods", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const evaluationCriteria = pgTable("evaluation_criteria", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  description: text("description").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type EvaluationCriterion = typeof evaluationCriteria.$inferSelect;
+export const insertEvaluationCriterionSchema = createInsertSchema(evaluationCriteria).omit({ id: true, createdAt: true });
+export const updateEvaluationCriterionSchema = insertEvaluationCriterionSchema.partial();
 
 // === RELATIONS ===
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -86,8 +111,32 @@ export const insertEvaluationSchema = createInsertSchema(evaluations).omit({ id:
 export type Course = typeof courses.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Evaluation = typeof evaluations.$inferSelect;
+export type EvaluationPeriod = typeof evaluationPeriods.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type UserWithoutPassword = Omit<User, 'password'>;
+
+const evaluationPeriodBaseSchema = createInsertSchema(evaluationPeriods)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    startDate: z.coerce.date(),
+    endDate: z.coerce.date(),
+  });
+
+export const insertEvaluationPeriodSchema = evaluationPeriodBaseSchema.refine((data) => data.endDate > data.startDate, {
+    message: "End date must be after start date",
+    path: ["endDate"],
+  });
+
+export const updateEvaluationPeriodSchema = evaluationPeriodBaseSchema.partial().refine(
+  (data) => {
+    if (!data.startDate || !data.endDate) return true;
+    return data.endDate > data.startDate;
+  },
+  {
+    message: "End date must be after start date",
+    path: ["endDate"],
+  },
+);
 
 export const loginSchema = z.object({
   username: z.string(),
@@ -124,6 +173,8 @@ export interface EvaluationSummary {
   averageSupport: number;
   averageFairness: number;
   averageRelevance: number;
+  medianOverall: number;
+  modeOverall: number;
   ratingDistribution: {
     excellent: number;
     good: number;

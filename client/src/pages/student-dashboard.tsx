@@ -1,9 +1,11 @@
 import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { Layout } from "@/components/layout";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { useLecturers } from "@/hooks/use-lecturers";
 import { useEvaluations } from "@/hooks/use-evaluations";
+import { useActiveEvaluationPeriod } from "@/hooks/use-evaluation-periods";
 import { StarRating } from "@/components/ui/star-rating";
 import { Book, User as UserIcon, CheckCircle2, AlertCircle, Building2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +15,7 @@ export default function StudentDashboard() {
   const [, setLocation] = useLocation();
   const { data: lecturers, isLoading: isLoadingLecturers } = useLecturers();
   const { data: evaluations, isLoading: isLoadingEvals } = useEvaluations();
+  const { data: activePeriod, isLoading: isLoadingPeriod } = useActiveEvaluationPeriod();
 
   // ✅ All hooks before early returns
   const { pending, completed } = useMemo(() => {
@@ -46,10 +49,11 @@ export default function StudentDashboard() {
     return null;
   }
 
-  const isLoading = isLoadingLecturers || isLoadingEvals;
+  const isLoading = isLoadingLecturers || isLoadingEvals || isLoadingPeriod;
 
   return (
     <Layout>
+      <DashboardShell>
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-display font-bold text-slate-900">My Dashboard</h1>
@@ -68,6 +72,20 @@ export default function StudentDashboard() {
         <LoadingDashboard />
       ) : (
         <div className="space-y-12">
+          <section>
+            {activePeriod ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-900">
+                <p className="text-sm font-semibold">Evaluation period is open: {(activePeriod as any).name}</p>
+                <p className="text-xs mt-1">{new Date((activePeriod as any).startDate).toLocaleString()} - {new Date((activePeriod as any).endDate).toLocaleString()}</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900">
+                <p className="text-sm font-semibold">Evaluations are currently closed.</p>
+                <p className="text-xs mt-1">No active evaluation period has been set by an admin.</p>
+              </div>
+            )}
+          </section>
+
           {/* PENDING SECTION */}
           <section>
             <div className="flex items-center gap-2 mb-6 border-b border-slate-200 pb-2">
@@ -99,10 +117,10 @@ export default function StudentDashboard() {
                     </div>
                     
                     <Link 
-                      href={`/evaluate/${lecturer.id}/${lecturer.courseId}`}
-                      className="w-full block text-center py-3 rounded-xl font-semibold bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors cursor-pointer"
+                      href={activePeriod ? `/evaluate/${lecturer.id}/${lecturer.courseId}` : "#"}
+                      className={`w-full block text-center py-3 rounded-xl font-semibold transition-colors cursor-pointer ${activePeriod ? 'bg-primary/10 text-primary hover:bg-primary hover:text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed pointer-events-none'}`}
                     >
-                      Start Evaluation
+                      {activePeriod ? "Start Evaluation" : "Period Closed"}
                     </Link>
                   </div>
                 ))}
@@ -149,21 +167,20 @@ export default function StudentDashboard() {
           </section>
         </div>
       )}
+      </DashboardShell>
     </Layout>
   );
 }
 
 function LoadingDashboard() {
   return (
-    <Layout>
-      <div className="animate-pulse space-y-8">
-        <div className="h-10 bg-slate-200 rounded w-48"></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1,2,3].map(i => (
-            <div key={i} className="h-64 bg-slate-200 rounded-2xl"></div>
-          ))}
-        </div>
+    <div className="animate-pulse space-y-8">
+      <div className="h-10 bg-slate-200 rounded w-48"></div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {[1,2,3].map(i => (
+          <div key={i} className="h-64 bg-slate-200 rounded-2xl"></div>
+        ))}
       </div>
-    </Layout>
+    </div>
   );
 }

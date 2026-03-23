@@ -129,6 +129,61 @@ export default function Home() {
           />
         </motion.div>
       </div>
+
+      {/* FOOTER */}
+      <footer className="mt-24 w-full border-t border-slate-200 bg-white/60 backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto px-6 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+            {/* Brand */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="bg-primary/10 p-2 rounded-xl">
+                  <BookOpen className="w-5 h-5 text-primary" />
+                </div>
+                <span className="font-display font-bold text-lg tracking-tight text-gradient">EDURATE</span>
+              </div>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                A transparent academic evaluation platform connecting students and educators.
+              </p>
+            </div>
+
+            {/* Quick Links */}
+            <div>
+              <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">Quick Links</h4>
+              <ul className="space-y-2">
+                <li>
+                  <Link href="/login" className="text-sm text-slate-500 hover:text-primary transition-colors cursor-pointer">
+                    Student / Lecturer Login
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/register" className="text-sm text-slate-500 hover:text-primary transition-colors cursor-pointer">
+                    Create an Account
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Admin */}
+            <div>
+              <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">Administration</h4>
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-600 hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Admin Portal
+              </Link>
+              <p className="mt-3 text-xs text-slate-400">Restricted to authorized administrators only.</p>
+            </div>
+          </div>
+
+          <div className="mt-10 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p className="text-xs text-slate-400">© {new Date().getFullYear()} EDURATE. All rights reserved.</p>
+            <p className="text-xs text-slate-400">Academic Evaluation Platform</p>
+          </div>
+        </div>
+      </footer>
     </Layout>
   );
 }

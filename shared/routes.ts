@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertEvaluationSchema, courses, users, evaluations, loginSchema, registerSchema } from './schema';
+import { insertEvaluationSchema, courses, users, evaluations, evaluationPeriods, loginSchema, registerSchema, insertEvaluationPeriodSchema, updateEvaluationPeriodSchema } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -22,7 +22,10 @@ const userResponseSchema = z.object({
   username: z.string(),
   role: z.string(),
   name: z.string(),
+  email: z.string().optional(),
   department: z.string().nullable(),
+  school: z.string().nullable().optional(),
+  matriculationNumber: z.string().nullable().optional(),
   courseId: z.number().nullable(),
 });
 
@@ -107,6 +110,57 @@ export const api = {
       },
     },
   },
+  evaluationPeriods: {
+    active: {
+      method: 'GET' as const,
+      path: '/api/evaluation-periods/active' as const,
+      responses: {
+        200: z.custom<typeof evaluationPeriods.$inferSelect>().nullable(),
+        401: errorSchemas.unauthorized,
+      },
+    },
+  },
+  admin: {
+    evaluationPeriods: {
+      list: {
+        method: 'GET' as const,
+        path: '/api/admin/evaluation-periods' as const,
+        responses: {
+          200: z.array(z.custom<typeof evaluationPeriods.$inferSelect>()),
+          403: errorSchemas.unauthorized,
+        },
+      },
+      create: {
+        method: 'POST' as const,
+        path: '/api/admin/evaluation-periods' as const,
+        input: insertEvaluationPeriodSchema,
+        responses: {
+          201: z.custom<typeof evaluationPeriods.$inferSelect>(),
+          400: errorSchemas.validation,
+          403: errorSchemas.unauthorized,
+        },
+      },
+      update: {
+        method: 'PUT' as const,
+        path: '/api/admin/evaluation-periods/:id' as const,
+        input: updateEvaluationPeriodSchema,
+        responses: {
+          200: z.custom<typeof evaluationPeriods.$inferSelect>(),
+          400: errorSchemas.validation,
+          403: errorSchemas.unauthorized,
+          404: errorSchemas.notFound,
+        },
+      },
+      delete: {
+        method: 'DELETE' as const,
+        path: '/api/admin/evaluation-periods/:id' as const,
+        responses: {
+          200: z.object({ message: z.string() }),
+          403: errorSchemas.unauthorized,
+        },
+      },
+    },
+  },
   dashboard: {
     lecturerSummary: {
       method: 'GET' as const,
@@ -123,6 +177,8 @@ export const api = {
           averageSupport: z.number(),
           averageFairness: z.number(),
           averageRelevance: z.number(),
+                    medianOverall: z.number(),
+                    modeOverall: z.number(),
           ratingDistribution: z.object({
             excellent: z.number(),
             good: z.number(),

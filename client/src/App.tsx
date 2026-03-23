@@ -9,6 +9,7 @@ import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import StudentDashboard from "@/pages/student-dashboard";
+import StudentProfile from "@/pages/student-profile";
 import LecturerDashboard from "@/pages/lecturer-dashboard";
 import LecturerProfile from "@/pages/lecturer-profile";
 import AdminDashboard from "@/pages/admin-dashboard";
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/reset-password/:token" component={ResetPassword} />
       <Route path="/verify-email/:token" component={VerifyEmail} />
       <Route path="/student" component={StudentDashboard} />
+      <Route path="/student/profile" component={StudentProfile} />
       <Route path="/lecturer" component={LecturerDashboard} />
       <Route path="/lecturer/profile" component={LecturerProfile} />
       <Route path="/admin" component={AdminDashboard} />
