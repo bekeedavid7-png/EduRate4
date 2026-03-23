@@ -1,20 +1,11 @@
 import { z } from 'zod';
-import { insertEvaluationSchema, courses, users, evaluations, loginSchema, registerSchema } from './schema';
+import { insertEvaluationSchema, courses, evaluations, loginSchema, registerSchema } from './schema';
 
 export const errorSchemas = {
-  validation: z.object({
-    message: z.string(),
-    field: z.string().optional(),
-  }),
-  notFound: z.object({
-    message: z.string(),
-  }),
-  unauthorized: z.object({
-    message: z.string(),
-  }),
-  internal: z.object({
-    message: z.string(),
-  }),
+  validation: z.object({ message: z.string(), field: z.string().optional() }),
+  notFound: z.object({ message: z.string() }),
+  unauthorized: z.object({ message: z.string() }),
+  internal: z.object({ message: z.string() }),
 };
 
 const userResponseSchema = z.object({
@@ -49,49 +40,46 @@ const courseSummarySchema = z.object({
   comments: z.array(z.string()),
 });
 
+// Evaluation period schema
+export const evaluationPeriodSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  isActive: z.boolean(),
+  createdAt: z.coerce.date().nullable(),
+});
+
 export const api = {
   auth: {
     login: {
       method: 'POST' as const,
       path: '/api/auth/login' as const,
       input: loginSchema,
-      responses: {
-        200: userResponseSchema,
-        401: errorSchemas.unauthorized,
-      },
+      responses: { 200: userResponseSchema, 401: errorSchemas.unauthorized },
     },
     register: {
       method: 'POST' as const,
       path: '/api/auth/register' as const,
       input: registerSchema,
-      responses: {
-        201: userResponseSchema,
-        400: errorSchemas.validation,
-      },
+      responses: { 201: userResponseSchema, 400: errorSchemas.validation },
     },
     me: {
       method: 'GET' as const,
       path: '/api/auth/me' as const,
-      responses: {
-        200: userResponseSchema,
-        401: errorSchemas.unauthorized,
-      },
+      responses: { 200: userResponseSchema, 401: errorSchemas.unauthorized },
     },
     logout: {
       method: 'POST' as const,
       path: '/api/auth/logout' as const,
-      responses: {
-        200: z.object({ message: z.string() }),
-      },
+      responses: { 200: z.object({ message: z.string() }) },
     },
   },
   courses: {
     list: {
       method: 'GET' as const,
       path: '/api/courses' as const,
-      responses: {
-        200: z.array(z.custom<typeof courses.$inferSelect>()),
-      },
+      responses: { 200: z.array(z.custom<typeof courses.$inferSelect>()) },
     },
   },
   lecturers: {
@@ -114,9 +102,7 @@ export const api = {
     list: {
       method: 'GET' as const,
       path: '/api/evaluations' as const,
-      responses: {
-        200: z.array(z.custom<typeof evaluations.$inferSelect>()),
-      },
+      responses: { 200: z.array(z.custom<typeof evaluations.$inferSelect>()) },
     },
     create: {
       method: 'POST' as const,
@@ -152,22 +138,47 @@ export const api = {
             poor: z.number(),
           }),
           totalEvaluations: z.number(),
-          // ✅ Per-course breakdown — one entry per assigned course
           courseBreakdowns: z.array(courseSummarySchema),
         }),
         401: errorSchemas.unauthorized,
       },
     },
-  }
+  },
+  periods: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/admin/periods' as const,
+      responses: { 200: z.array(evaluationPeriodSchema) },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/admin/periods' as const,
+      responses: { 201: evaluationPeriodSchema },
+    },
+    activate: {
+      method: 'PUT' as const,
+      path: '/api/admin/periods/:id/activate' as const,
+      responses: { 200: evaluationPeriodSchema },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/admin/periods/:id' as const,
+      responses: { 200: z.object({ message: z.string() }) },
+    },
+    // Public endpoint — student uses this to check if evaluations are open
+    active: {
+      method: 'GET' as const,
+      path: '/api/periods/active' as const,
+      responses: { 200: evaluationPeriodSchema.nullable() },
+    },
+  },
 };
 
 export function buildUrl(path: string, params?: Record<string, string | number>): string {
   let url = path;
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
-      if (url.includes(`:${key}`)) {
-        url = url.replace(`:${key}`, String(value));
-      }
+      if (url.includes(`:${key}`)) url = url.replace(`:${key}`, String(value));
     });
   }
   return url;

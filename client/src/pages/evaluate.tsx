@@ -8,7 +8,8 @@ import { StarRating } from "@/components/ui/star-rating";
 import { useAuth } from "@/hooks/use-auth";
 import { useCreateEvaluation } from "@/hooks/use-evaluations";
 import { useLecturers } from "@/hooks/use-lecturers";
-import { ArrowLeft, BookOpen, User } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, BookOpen, User, CalendarX, Clock } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Evaluate() {
@@ -33,6 +34,16 @@ export default function Evaluate() {
   const lecturerId = params?.lecturerId ? parseInt(params.lecturerId) : 0;
   const courseId = params?.courseId ? parseInt(params.courseId) : 0;
 
+  // Fetch active period
+  const { data: activePeriod, isLoading: isPeriodLoading } = useQuery({
+    queryKey: ["/api/periods/active"],
+    queryFn: async () => {
+      const res = await fetch("/api/periods/active", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
   useEffect(() => {
     if (!isAuthLoading && (!user || user.role !== 'student')) {
       setLocation('/login');
@@ -41,7 +52,7 @@ export default function Evaluate() {
 
   const targetLecturer = lecturers?.find(l => l.id === lecturerId && l.courseId === courseId);
 
-  if (isAuthLoading || isLecturersLoading) {
+  if (isAuthLoading || isLecturersLoading || isPeriodLoading) {
     return <Layout><div className="flex justify-center p-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div></Layout>;
   }
 
@@ -56,14 +67,61 @@ export default function Evaluate() {
     );
   }
 
-  const isFormValid = overallRating > 0 && clarityRating > 0 && engagementRating > 0 && 
-                      materialsRating > 0 && organizationRating > 0 && feedbackRating > 0 && 
-                      paceRating > 0 && supportRating > 0 && fairnessRating > 0 && relevanceRating > 0;
+  // === PERIOD CHECK ===
+  const now = new Date();
+  const periodIsOpen = activePeriod &&
+    new Date(activePeriod.startDate) <= now &&
+    now <= new Date(activePeriod.endDate);
+
+  if (!activePeriod || !periodIsOpen) {
+    return (
+      <Layout>
+        <div className="max-w-lg mx-auto mt-16">
+          <Link href="/student" className="inline-flex items-center text-sm text-slate-500 hover:text-primary mb-8 transition-colors">
+            <ArrowLeft className="w-4 h-4 mr-1" /> Back to Dashboard
+          </Link>
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-10 text-center">
+            <div className="bg-rose-100 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5">
+              <CalendarX className="w-8 h-8 text-rose-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Evaluations Closed</h2>
+            {!activePeriod ? (
+              <p className="text-slate-500 mb-6">There is no active evaluation period at this time. Please check back later or contact your administrator.</p>
+            ) : (
+              <>
+                <p className="text-slate-500 mb-3">
+                  The current evaluation period <span className="font-semibold text-slate-700">"{activePeriod.name}"</span> is outside the allowed date window.
+                </p>
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-sm text-slate-600 mb-6 space-y-1">
+                  <div className="flex items-center justify-center gap-2">
+                    <Clock className="w-4 h-4 text-slate-400" />
+                    <span>Opens: <span className="font-semibold">{new Date(activePeriod.startDate).toLocaleString()}</span></span>
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <Clock className="w-4 h-4 text-slate-400" />
+                    <span>Closes: <span className="font-semibold">{new Date(activePeriod.endDate).toLocaleString()}</span></span>
+                  </div>
+                </div>
+              </>
+            )}
+            <Link href="/student">
+              <Button className="rounded-xl bg-gradient-to-r from-primary to-indigo-600 px-6">
+                Return to Dashboard
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const isFormValid = overallRating > 0 && clarityRating > 0 && engagementRating > 0 &&
+    materialsRating > 0 && organizationRating > 0 && feedbackRating > 0 &&
+    paceRating > 0 && supportRating > 0 && fairnessRating > 0 && relevanceRating > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid) return;
-
     await createMutation.mutateAsync({
       lecturerId,
       courseId,
@@ -87,6 +145,15 @@ export default function Evaluate() {
         <Link href="/student" className="inline-flex items-center text-sm text-slate-500 hover:text-primary mb-8 transition-colors cursor-pointer">
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Dashboard
         </Link>
+
+        {/* Active period banner */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3 mb-6 flex items-center gap-3">
+          <Clock className="w-4 h-4 text-emerald-600 shrink-0" />
+          <p className="text-sm text-emerald-700">
+            <span className="font-semibold">{activePeriod.name}</span> — Evaluations open until{" "}
+            <span className="font-semibold">{new Date(activePeriod.endDate).toLocaleString()}</span>
+          </p>
+        </div>
 
         <div className="bg-white rounded-3xl border border-slate-200 shadow-lg shadow-black/5 overflow-hidden">
           <div className="bg-slate-50 border-b border-slate-200 p-8">
@@ -116,82 +183,31 @@ export default function Evaluate() {
 
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
             <div className="grid gap-8 sm:grid-cols-1">
-              <RatingSection 
-                title="Overall Performance" 
-                description="How would you rate the lecturer's overall effectiveness?"
-                value={overallRating}
-                onChange={setOverallRating}
-                size="lg"
-              />
+              <RatingSection title="Overall Performance" description="How would you rate the lecturer's overall effectiveness?" value={overallRating} onChange={setOverallRating} size="lg" />
               <div className="h-px bg-slate-100"></div>
-              <RatingSection 
-                title="Clarity of Explanation" 
-                description="Did the lecturer explain complex concepts clearly?"
-                value={clarityRating}
-                onChange={setClarityRating}
-              />
+              <RatingSection title="Clarity of Explanation" description="Did the lecturer explain complex concepts clearly?" value={clarityRating} onChange={setClarityRating} />
               <div className="h-px bg-slate-100"></div>
-              <RatingSection 
-                title="Engagement & Interaction" 
-                description="Did the lecturer encourage participation and keep the class engaged?"
-                value={engagementRating}
-                onChange={setEngagementRating}
-              />
+              <RatingSection title="Engagement & Interaction" description="Did the lecturer encourage participation and keep the class engaged?" value={engagementRating} onChange={setEngagementRating} />
               <div className="h-px bg-slate-100"></div>
-              <RatingSection 
-                title="Quality of Materials" 
-                description="Were the course materials helpful and well-designed?"
-                value={materialsRating}
-                onChange={setMaterialsRating}
-              />
+              <RatingSection title="Quality of Materials" description="Were the course materials helpful and well-designed?" value={materialsRating} onChange={setMaterialsRating} />
               <div className="h-px bg-slate-100"></div>
-              <RatingSection 
-                title="Organization" 
-                description="Was the course well-structured and organized?"
-                value={organizationRating}
-                onChange={setOrganizationRating}
-              />
+              <RatingSection title="Organization" description="Was the course well-structured and organized?" value={organizationRating} onChange={setOrganizationRating} />
               <div className="h-px bg-slate-100"></div>
-              <RatingSection 
-                title="Feedback Quality" 
-                description="Was the feedback provided on assignments timely and helpful?"
-                value={feedbackRating}
-                onChange={setFeedbackRating}
-              />
+              <RatingSection title="Feedback Quality" description="Was the feedback provided on assignments timely and helpful?" value={feedbackRating} onChange={setFeedbackRating} />
               <div className="h-px bg-slate-100"></div>
-              <RatingSection 
-                title="Teaching Pace" 
-                description="Was the pace of the course appropriate for your learning?"
-                value={paceRating}
-                onChange={setPaceRating}
-              />
+              <RatingSection title="Teaching Pace" description="Was the pace of the course appropriate for your learning?" value={paceRating} onChange={setPaceRating} />
               <div className="h-px bg-slate-100"></div>
-              <RatingSection 
-                title="Student Support" 
-                description="Did the lecturer provide adequate support outside of class?"
-                value={supportRating}
-                onChange={setSupportRating}
-              />
+              <RatingSection title="Student Support" description="Did the lecturer provide adequate support outside of class?" value={supportRating} onChange={setSupportRating} />
               <div className="h-px bg-slate-100"></div>
-              <RatingSection 
-                title="Assessment Fairness" 
-                description="Were the assessments fair and aligned with course content?"
-                value={fairnessRating}
-                onChange={setFairnessRating}
-              />
+              <RatingSection title="Assessment Fairness" description="Were the assessments fair and aligned with course content?" value={fairnessRating} onChange={setFairnessRating} />
               <div className="h-px bg-slate-100"></div>
-              <RatingSection 
-                title="Content Relevance" 
-                description="Was the course content relevant to your field of study?"
-                value={relevanceRating}
-                onChange={setRelevanceRating}
-              />
+              <RatingSection title="Content Relevance" description="Was the course content relevant to your field of study?" value={relevanceRating} onChange={setRelevanceRating} />
             </div>
 
             <div className="space-y-3 pt-4">
               <Label htmlFor="comments" className="text-base font-semibold">Additional Comments (Optional)</Label>
               <p className="text-sm text-slate-500">Share any specific feedback, strengths, or areas for improvement.</p>
-              <Textarea 
+              <Textarea
                 id="comments"
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
@@ -201,8 +217,8 @@ export default function Evaluate() {
             </div>
 
             <div className="pt-4 flex justify-end">
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={!isFormValid || createMutation.isPending}
                 className="px-8 py-6 rounded-xl text-md font-semibold bg-gradient-to-r from-primary to-indigo-600 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
               >

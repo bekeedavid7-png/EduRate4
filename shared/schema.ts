@@ -52,6 +52,16 @@ export const evaluations = pgTable("evaluations", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// === EVALUATION PERIODS ===
+export const evaluationPeriods = pgTable("evaluation_periods", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  isActive: boolean("is_active").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // === RELATIONS ===
 export const usersRelations = relations(users, ({ one, many }) => ({
   course: one(courses, { fields: [users.courseId], references: [courses.id] }),
@@ -81,11 +91,13 @@ export const evaluationsRelations = relations(evaluations, ({ one }) => ({
 export const insertCourseSchema = createInsertSchema(courses).omit({ id: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, emailVerified: true, verificationToken: true, resetPasswordToken: true, resetPasswordExpiry: true });
 export const insertEvaluationSchema = createInsertSchema(evaluations).omit({ id: true, createdAt: true, studentId: true });
+export const insertEvaluationPeriodSchema = createInsertSchema(evaluationPeriods).omit({ id: true, createdAt: true });
 
 // === EXPLICIT API CONTRACT TYPES ===
 export type Course = typeof courses.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Evaluation = typeof evaluations.$inferSelect;
+export type EvaluationPeriod = typeof evaluationPeriods.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type UserWithoutPassword = Omit<User, 'password'>;
 

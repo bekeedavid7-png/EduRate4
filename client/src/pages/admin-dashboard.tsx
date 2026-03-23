@@ -9,8 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, BookOpen, Star, Trash2, Plus, ShieldCheck } from "lucide-react";
-import { motion } from "framer-motion";
+import { Users, BookOpen, Star, Trash2, Plus, ShieldCheck, CalendarRange, Power } from "lucide-react";
 
 export default function AdminDashboard() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -18,12 +17,18 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // New course form state
+  // Course form state
   const [newDept, setNewDept] = useState("");
   const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
   const [customDept, setCustomDept] = useState("");
   const [deptMode, setDeptMode] = useState<'existing' | 'new'>('existing');
+
+  // Period form state
+  const [periodName, setPeriodName] = useState("");
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const [periodActive, setPeriodActive] = useState(true);
 
   useEffect(() => {
     if (!isAuthLoading && (!user || user.role !== 'admin')) setLocation('/login');
@@ -60,16 +65,23 @@ export default function AdminDashboard() {
     enabled: !!user && user.role === 'admin',
   });
 
+  const { data: periods = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/periods"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/periods", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!user && user.role === 'admin',
+  });
+
   // === MUTATIONS ===
   const deleteUser = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE", credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).message);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "User deleted" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] }); toast({ title: "User deleted" }); },
     onError: (err: Error) => toast({ variant: "destructive", title: "Error", description: err.message }),
   });
 
@@ -77,9 +89,7 @@ export default function AdminDashboard() {
     mutationFn: async () => {
       const dept = deptMode === 'new' ? customDept : newDept;
       const res = await fetch("/api/admin/courses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ department: dept, code: newCode, name: newName }),
       });
       if (!res.ok) throw new Error((await res.json()).message);
@@ -111,11 +121,42 @@ export default function AdminDashboard() {
       const res = await fetch(`/api/admin/evaluations/${id}`, { method: "DELETE", credentials: "include" });
       if (!res.ok) throw new Error("Failed");
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/evaluations"] });
-      toast({ title: "Evaluation deleted" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/evaluations"] }); toast({ title: "Evaluation deleted" }); },
     onError: () => toast({ variant: "destructive", title: "Error", description: "Failed to delete evaluation" }),
+  });
+
+  const createPeriod = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/periods", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ name: periodName, startDate: periodStart, endDate: periodEnd, isActive: periodActive }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/periods"] });
+      setPeriodName(""); setPeriodStart(""); setPeriodEnd(""); setPeriodActive(true);
+      toast({ title: "Evaluation period created" });
+    },
+    onError: (err: Error) => toast({ variant: "destructive", title: "Error", description: err.message }),
+  });
+
+  const activatePeriod = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/periods/${id}/activate`, { method: "PUT", credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/periods"] }); toast({ title: "Period activated" }); },
+    onError: () => toast({ variant: "destructive", title: "Error", description: "Failed to activate period" }),
+  });
+
+  const deletePeriod = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/periods/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/periods"] }); toast({ title: "Period deleted" }); },
+    onError: () => toast({ variant: "destructive", title: "Error", description: "Failed to delete period" }),
   });
 
   if (isAuthLoading) return <Layout><div className="flex justify-center p-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div></Layout>;
@@ -124,16 +165,24 @@ export default function AdminDashboard() {
   const students = users.filter((u: any) => u.role === 'student');
   const lecturers = users.filter((u: any) => u.role === 'lecturer');
 
+  const formatDate = (d: string) => new Date(d).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+  });
+
+  const isPeriodOpen = (p: any) => {
+    const now = new Date();
+    return new Date(p.startDate) <= now && now <= new Date(p.endDate);
+  };
+
   return (
     <Layout>
-      {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <div className="bg-rose-100 p-3 rounded-2xl">
           <ShieldCheck className="w-7 h-7 text-rose-600" />
         </div>
         <div>
           <h1 className="text-3xl font-display font-bold text-slate-900">Admin Panel</h1>
-          <p className="text-slate-500 text-sm">Manage courses, users and evaluations</p>
+          <p className="text-slate-500 text-sm">Manage courses, users, evaluations and periods</p>
         </div>
       </div>
 
@@ -163,18 +212,19 @@ export default function AdminDashboard() {
           <TabsTrigger value="evaluations" className="rounded-lg flex items-center gap-2">
             <Star className="w-4 h-4" /> Evaluations
           </TabsTrigger>
+          <TabsTrigger value="periods" className="rounded-lg flex items-center gap-2">
+            <CalendarRange className="w-4 h-4" /> Evaluation Periods
+          </TabsTrigger>
         </TabsList>
 
         {/* === COURSES TAB === */}
         <TabsContent value="courses">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Add Course Form */}
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
               <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-primary" /> Add New Course
               </h2>
               <div className="space-y-4">
-                {/* Department mode toggle */}
                 <div className="flex p-1 bg-slate-100 rounded-xl">
                   <button type="button" onClick={() => setDeptMode('existing')}
                     className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${deptMode === 'existing' ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}>
@@ -185,17 +235,12 @@ export default function AdminDashboard() {
                     New Dept
                   </button>
                 </div>
-
                 {deptMode === 'existing' ? (
                   <div className="space-y-1">
                     <Label>Department</Label>
                     <Select value={newDept} onValueChange={setNewDept}>
-                      <SelectTrigger className="rounded-xl bg-slate-50/50">
-                        <SelectValue placeholder="Select department" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                      </SelectContent>
+                      <SelectTrigger className="rounded-xl bg-slate-50/50"><SelectValue placeholder="Select department" /></SelectTrigger>
+                      <SelectContent>{departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                 ) : (
@@ -204,7 +249,6 @@ export default function AdminDashboard() {
                     <Input value={customDept} onChange={e => setCustomDept(e.target.value)} className="rounded-xl bg-slate-50/50" placeholder="e.g. Engineering" />
                   </div>
                 )}
-
                 <div className="space-y-1">
                   <Label>Course Code</Label>
                   <Input value={newCode} onChange={e => setNewCode(e.target.value)} className="rounded-xl bg-slate-50/50" placeholder="e.g. ENG101" />
@@ -223,7 +267,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Course List */}
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
               <h2 className="text-lg font-bold text-slate-800 mb-5">All Courses ({courses.length})</h2>
               <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
@@ -236,9 +279,7 @@ export default function AdminDashboard() {
                           <span className="text-sm font-bold text-slate-800">{course.code}</span>
                           <span className="text-sm text-slate-500 ml-2">{course.name}</span>
                         </div>
-                        <button onClick={() => {
-                          if (confirm(`Delete ${course.code}?`)) deleteCourse.mutate(course.id);
-                        }} className="text-slate-400 hover:text-rose-500 transition-colors p-1">
+                        <button onClick={() => { if (confirm(`Delete ${course.code}?`)) deleteCourse.mutate(course.id); }} className="text-slate-400 hover:text-rose-500 transition-colors p-1">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -276,11 +317,7 @@ export default function AdminDashboard() {
                       <td className="px-6 py-4 text-slate-600">{u.username}</td>
                       <td className="px-6 py-4 text-slate-600">{u.email || "—"}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          u.role === 'admin' ? 'bg-rose-100 text-rose-600' :
-                          u.role === 'lecturer' ? 'bg-indigo-100 text-indigo-600' :
-                          'bg-emerald-100 text-emerald-600'
-                        }`}>{u.role}</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${u.role === 'admin' ? 'bg-rose-100 text-rose-600' : u.role === 'lecturer' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>{u.role}</span>
                       </td>
                       <td className="px-6 py-4 text-slate-600">{u.department || "—"}</td>
                       <td className="px-6 py-4">
@@ -290,9 +327,7 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-6 py-4">
                         {u.role !== 'admin' && (
-                          <button onClick={() => {
-                            if (confirm(`Delete user "${u.name}"? This cannot be undone.`)) deleteUser.mutate(u.id);
-                          }} className="text-slate-400 hover:text-rose-500 transition-colors p-1">
+                          <button onClick={() => { if (confirm(`Delete user "${u.name}"? This cannot be undone.`)) deleteUser.mutate(u.id); }} className="text-slate-400 hover:text-rose-500 transition-colors p-1">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
@@ -330,21 +365,11 @@ export default function AdminDashboard() {
                       <td className="px-6 py-4 font-medium text-slate-800">{e.studentName}</td>
                       <td className="px-6 py-4 text-slate-600">{e.lecturerName}</td>
                       <td className="px-6 py-4 text-slate-600">{e.courseCode}</td>
+                      <td className="px-6 py-4"><span className="flex items-center gap-1 font-bold text-amber-500">★ {e.overallRating}/5</span></td>
+                      <td className="px-6 py-4 text-slate-500 text-xs">{e.createdAt ? new Date(e.createdAt).toLocaleDateString() : "—"}</td>
+                      <td className="px-6 py-4 text-slate-500 max-w-xs truncate italic">{e.comments || "—"}</td>
                       <td className="px-6 py-4">
-                        <span className="flex items-center gap-1 font-bold text-amber-500">
-                          ★ {e.overallRating}/5
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-slate-500 text-xs">
-                        {e.createdAt ? new Date(e.createdAt).toLocaleDateString() : "—"}
-                      </td>
-                      <td className="px-6 py-4 text-slate-500 max-w-xs truncate italic">
-                        {e.comments || "—"}
-                      </td>
-                      <td className="px-6 py-4">
-                        <button onClick={() => {
-                          if (confirm("Delete this evaluation?")) deleteEvaluation.mutate(e.id);
-                        }} className="text-slate-400 hover:text-rose-500 transition-colors p-1">
+                        <button onClick={() => { if (confirm("Delete this evaluation?")) deleteEvaluation.mutate(e.id); }} className="text-slate-400 hover:text-rose-500 transition-colors p-1">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
@@ -352,8 +377,126 @@ export default function AdminDashboard() {
                   ))}
                 </tbody>
               </table>
-              {evaluations.length === 0 && (
-                <div className="text-center py-12 text-slate-400">No evaluations yet.</div>
+              {evaluations.length === 0 && <div className="text-center py-12 text-slate-400">No evaluations yet.</div>}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* === EVALUATION PERIODS TAB === */}
+        <TabsContent value="periods">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Create Period Form */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-primary" /> Create Evaluation Period
+              </h2>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <Label>Period Name</Label>
+                  <Input
+                    value={periodName}
+                    onChange={e => setPeriodName(e.target.value)}
+                    className="rounded-xl bg-slate-50/50"
+                    placeholder="e.g. 2025/2026 2nd Semester"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Start Date & Time</Label>
+                  <Input
+                    type="datetime-local"
+                    value={periodStart}
+                    onChange={e => setPeriodStart(e.target.value)}
+                    className="rounded-xl bg-slate-50/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>End Date & Time</Label>
+                  <Input
+                    type="datetime-local"
+                    value={periodEnd}
+                    onChange={e => setPeriodEnd(e.target.value)}
+                    className="rounded-xl bg-slate-50/50"
+                  />
+                </div>
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={periodActive}
+                    onChange={e => setPeriodActive(e.target.checked)}
+                    className="w-4 h-4 rounded accent-primary"
+                  />
+                  <span className="text-sm font-medium text-slate-700">Set as active period</span>
+                </label>
+                <p className="text-xs text-slate-400">Setting a period as active will deactivate all other periods.</p>
+                <Button
+                  onClick={() => createPeriod.mutate()}
+                  disabled={createPeriod.isPending || !periodName || !periodStart || !periodEnd}
+                  className="w-full rounded-xl bg-gradient-to-r from-primary to-indigo-600"
+                >
+                  {createPeriod.isPending ? "Creating..." : "Create Period"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Period List */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-slate-800 mb-5">All Periods ({periods.length})</h2>
+              {periods.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <CalendarRange className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No evaluation periods created yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                  {periods.map((p: any) => {
+                    const open = isPeriodOpen(p);
+                    return (
+                      <div key={p.id} className={`rounded-2xl border p-4 ${p.isActive ? 'border-primary/30 bg-primary/5' : 'border-slate-100 bg-slate-50'}`}>
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div>
+                            <h3 className="font-bold text-slate-900 text-sm">{p.name}</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {formatDate(p.startDate)} → {formatDate(p.endDate)}
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            {p.isActive && (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Active Flag</span>
+                            )}
+                            {open && (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">Within Date Window</span>
+                            )}
+                            {!open && p.isActive && (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">Outside Window</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {!p.isActive && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => activatePeriod.mutate(p.id)}
+                              disabled={activatePeriod.isPending}
+                              className="rounded-lg text-xs flex items-center gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
+                            >
+                              <Power className="w-3 h-3" /> Activate
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { if (confirm(`Delete "${p.name}"?`)) deletePeriod.mutate(p.id); }}
+                            disabled={deletePeriod.isPending}
+                            className="rounded-lg text-xs flex items-center gap-1.5 border-rose-200 text-rose-500 hover:bg-rose-50"
+                          >
+                            <Trash2 className="w-3 h-3" /> Delete
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>

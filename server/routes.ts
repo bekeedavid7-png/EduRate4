@@ -26,7 +26,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) return res.status(400).send({ message: "Username already exists" });
 
-      // Admin secret key check
       if (req.body.role === 'admin') {
         if (req.body.adminSecret !== ADMIN_SECRET) {
           return res.status(403).json({ message: "Invalid admin secret key" });
@@ -34,7 +33,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       if (req.body.email) {
-        // Only allow Babcock University email addresses (skip for admin)
         if (req.body.role !== 'admin') {
           const emailLower = req.body.email.toLowerCase();
           const allowedDomains = ['@student.babcock.edu.ng', '@babcock.edu.ng'];
@@ -43,7 +41,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             return res.status(400).json({ message: "Only Babcock University email addresses are allowed (@student.babcock.edu.ng or @babcock.edu.ng)" });
           }
         }
-
         const existingEmail = await storage.getUserByEmail(req.body.email);
         if (existingEmail) return res.status(400).json({ message: "An account with this email already exists" });
       }
@@ -183,6 +180,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.evaluations.create.path, async (req, res) => {
     if (!req.isAuthenticated() || req.user.role !== 'student') return res.status(401).json({ message: "Unauthorized" });
     try {
+      // === EVALUATION PERIOD CHECK ===
+      const activePeriod = await storage.getActivePeriod();
+      if (!activePeriod) {
+        return res.status(403).json({ message: "Evaluations are currently closed. No active evaluation period." });
+      }
+      const now = new Date();
+      if (now < activePeriod.startDate || now > activePeriod.endDate) {
+        return res.status(403).json({
+          message: `Evaluations are closed. The active period "${activePeriod.name}" runs from ${activePeriod.startDate.toLocaleDateString()} to ${activePeriod.endDate.toLocaleDateString()}.`,
+          periodClosed: true,
+        });
+      }
+
       const input = api.evaluations.create.input.parse(req.body);
       const studentDept = (req.user as any).department;
       if (studentDept) {
@@ -198,6 +208,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Internal server error" });
     }
+  });
+
+  // === PUBLIC: Get active period (used by student evaluate page) ===
+  app.get("/api/periods/active", async (req, res) => {
+    const period = await storage.getActivePeriod();
+    res.json(period || null);
   });
 
   // === LECTURER DASHBOARD ===
@@ -237,7 +253,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // === ADMIN ROUTES ===
   // ============================================================
 
-  // GET all users
   app.get("/api/admin/users", async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
     const allUsers = await storage.getAllUsers();
@@ -245,7 +260,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(safe);
   });
 
-  // DELETE a user
   app.delete("/api/admin/users/:id", async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
     const id = parseInt(req.params.id);
@@ -254,14 +268,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ message: "User deleted" });
   });
 
-  // GET all courses (admin)
   app.get("/api/admin/courses", async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
     const allCourses = await storage.getCourses();
     res.json(allCourses);
   });
 
-  // CREATE a course
   app.post("/api/admin/courses", async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
     const { department, code, name } = req.body;
@@ -270,20 +282,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(201).json(course);
   });
 
-  // DELETE a course
   app.delete("/api/admin/courses/:id", async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
     await storage.deleteCourse(parseInt(req.params.id));
     res.json({ message: "Course deleted" });
   });
 
-  // GET all evaluations (admin)
   app.get("/api/admin/evaluations", async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
     const allEvals = await storage.getAllEvaluations();
     const allUsers = await storage.getAllUsers();
     const allCourses = await storage.getCourses();
-
     const enriched = allEvals.map(e => ({
       ...e,
       studentName: allUsers.find(u => u.id === e.studentId)?.name || "Unknown",
@@ -294,11 +303,55 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(enriched);
   });
 
-  // DELETE an evaluation
   app.delete("/api/admin/evaluations/:id", async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
     await storage.deleteEvaluation(parseInt(req.params.id));
     res.json({ message: "Evaluation deleted" });
+  });
+
+  // === ADMIN: EVALUATION PERIODS ===
+  app.get("/api/admin/periods", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    const periods = await storage.getAllPeriods();
+    res.json(periods);
+  });
+
+  app.post("/api/admin/periods", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    try {
+      const { name, startDate, endDate, isActive } = req.body;
+      if (!name || !startDate || !endDate) {
+        return res.status(400).json({ message: "Name, start date and end date are required" });
+      }
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+      if (end <= start) {
+        return res.status(400).json({ message: "End date must be after start date" });
+      }
+      const period = await storage.createPeriod({ name, startDate: start, endDate: end, isActive: !!isActive });
+      res.status(201).json(period);
+    } catch {
+      res.status(500).json({ message: "Failed to create period" });
+    }
+  });
+
+  app.put("/api/admin/periods/:id/activate", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    try {
+      const period = await storage.activatePeriod(parseInt(req.params.id));
+      res.json(period);
+    } catch {
+      res.status(500).json({ message: "Failed to activate period" });
+    }
+  });
+
+  app.delete("/api/admin/periods/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    await storage.deletePeriod(parseInt(req.params.id));
+    res.json({ message: "Period deleted" });
   });
 
   await seedDatabase();
