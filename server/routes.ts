@@ -354,6 +354,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ message: "Period deleted" });
   });
 
+  // === CHANGE PASSWORD (authenticated) ===
+  app.post("/api/auth/change-password", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) return res.status(400).json({ message: "Current and new password are required" });
+      if (newPassword.length < 8) return res.status(400).json({ message: "New password must be at least 8 characters" });
+
+      const user = await storage.getUser((req.user as any).id);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      // Verify current password using scrypt
+      const { scrypt, timingSafeEqual } = await import("crypto");
+      const { promisify } = await import("util");
+      const scryptAsync = promisify(scrypt);
+      const [salt, storedHash] = user.password.split(".");
+      const suppliedHash = (await scryptAsync(currentPassword, salt, 64)) as Buffer;
+      const isMatch = timingSafeEqual(Buffer.from(storedHash, "hex"), suppliedHash);
+      if (!isMatch) return res.status(400).json({ message: "Current password is incorrect" });
+
+      const hashed = await hashPassword(newPassword);
+      await storage.updateUser(user.id, { password: hashed });
+      res.json({ message: "Password changed successfully" });
+    } catch {
+      res.status(500).json({ message: "Failed to change password" });
+    }
+  });
+
   // === PUBLIC STATS (no auth required) ===
   app.get("/api/stats/public", async (req, res) => {
     try {
