@@ -1,13 +1,21 @@
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
-import { ArrowRight, Star, BarChart3, ShieldCheck, Users, BookOpen, CheckCircle2, TrendingUp } from "lucide-react";
+import { ArrowRight, Star, BarChart3, ShieldCheck, Users, BookOpen, GraduationCap, ClipboardList, ListChecks, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
-import { useLecturers } from "@/hooks/use-lecturers";
+import { useQuery } from "@tanstack/react-query";
 
 export default function Home() {
   const { user, isLoading: isAuthLoading } = useAuth();
-  const { data: lecturers } = useLecturers();
+  const { data: stats } = useQuery<{
+    totalStudents: number;
+    totalLecturers: number;
+    totalEvaluations: number;
+    totalCourses: number;
+    evaluationCriteriaCount: number;
+  }>({
+    queryKey: ["/api/stats/public"],
+  });
 
   return (
     <Layout>
@@ -62,47 +70,51 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* LECTURER LIST SECTION */}
-        <motion.section 
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
+        {/* PLATFORM STATISTICS SECTION */}
+        <motion.section
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
           className="mt-24 w-full max-w-6xl mx-auto px-6 py-16 bg-slate-50 rounded-[3rem] border border-slate-100"
         >
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-display font-bold text-slate-900 mb-4">Our Lecturers</h2>
-            <p className="text-slate-500">Meet the dedicated educators on our platform</p>
+            <h2 className="text-3xl font-display font-bold text-slate-900 mb-4">Platform at a Glance</h2>
+            <p className="text-slate-500">Live insights into the EDURATE community</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {lecturers?.map((lecturer) => (
-              <motion.div
-                key={lecturer.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-indigo-600" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="font-bold text-slate-900">{lecturer.name}</h3>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{lecturer.department}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <BookOpen className="w-4 h-4 text-slate-400" />
-                  <span className="font-medium">{lecturer.courseCode}: {lecturer.courseName}</span>
-                </div>
-              </motion.div>
-            ))}
-            {!lecturers?.length && (
-              <div className="col-span-full text-center py-10 text-slate-400">
-                No lecturers have signed up yet.
-              </div>
-            )}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+            <StatCard
+              icon={<GraduationCap className="w-6 h-6 text-indigo-600" />}
+              bgClass="bg-indigo-50"
+              label="Students"
+              value={stats?.totalStudents ?? "—"}
+            />
+            <StatCard
+              icon={<Users className="w-6 h-6 text-violet-600" />}
+              bgClass="bg-violet-50"
+              label="Lecturers"
+              value={stats?.totalLecturers ?? "—"}
+            />
+            <StatCard
+              icon={<ClipboardList className="w-6 h-6 text-emerald-600" />}
+              bgClass="bg-emerald-50"
+              label="Evaluations"
+              value={stats?.totalEvaluations ?? "—"}
+            />
+            <StatCard
+              icon={<BookOpen className="w-6 h-6 text-amber-600" />}
+              bgClass="bg-amber-50"
+              label="Courses"
+              value={stats?.totalCourses ?? "—"}
+            />
+            <StatCard
+              icon={<ListChecks className="w-6 h-6 text-rose-600" />}
+              bgClass="bg-rose-50"
+              label="Eval. Criteria"
+              value={stats?.evaluationCriteriaCount ?? 10}
+              className="col-span-2 md:col-span-1"
+            />
           </div>
         </motion.section>
 
@@ -142,5 +154,32 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode, titl
       <h3 className="text-xl font-display font-bold text-slate-900 mb-3">{title}</h3>
       <p className="text-slate-600 leading-relaxed">{description}</p>
     </div>
+  );
+}
+
+function StatCard({ icon, bgClass, label, value, className }: {
+  icon: React.ReactNode;
+  bgClass: string;
+  label: string;
+  value: number | string;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      whileInView={{ opacity: 1, scale: 1 }}
+      viewport={{ once: true }}
+      className={`bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-center flex flex-col items-center gap-3 ${className ?? ""}`}
+    >
+      <div className={`w-12 h-12 rounded-2xl ${bgClass} flex items-center justify-center`}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-3xl font-display font-extrabold text-slate-900">
+          {typeof value === "number" ? value.toLocaleString() : value}
+        </p>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-1">{label}</p>
+      </div>
+    </motion.div>
   );
 }

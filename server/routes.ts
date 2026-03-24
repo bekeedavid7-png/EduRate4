@@ -354,6 +354,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ message: "Period deleted" });
   });
 
+  // === PUBLIC STATS (no auth required) ===
+  app.get("/api/stats/public", async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const allEvals = await storage.getAllEvaluations();
+      const allCourses = await storage.getCourses();
+
+      const totalStudents = allUsers.filter(u => u.role === 'student').length;
+      const totalLecturers = allUsers.filter(u => u.role === 'lecturer').length;
+      const totalEvaluations = allEvals.length;
+      const totalCourses = allCourses.length;
+      const evaluationCriteriaCount = 10; // Overall, Clarity, Engagement, Materials, Organization, Feedback, Pace, Support, Fairness, Relevance
+
+      res.json({
+        totalStudents,
+        totalLecturers,
+        totalEvaluations,
+        totalCourses,
+        evaluationCriteriaCount,
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
   await seedDatabase();
   return httpServer;
 }

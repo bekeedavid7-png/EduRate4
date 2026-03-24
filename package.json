@@ -113,5 +113,17 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
-  }
+  },
+  "main": "postcss.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bekeedavid7-png/EduRate4.git"
+  },
+  "keywords": [],
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/bekeedavid7-png/EduRate4/issues"
+  },
+  "homepage": "https://github.com/bekeedavid7-png/EduRate4#readme",
+  "description": ""
 }
