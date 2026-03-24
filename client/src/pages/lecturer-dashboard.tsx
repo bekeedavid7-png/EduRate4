@@ -100,19 +100,19 @@ export default function LecturerDashboard() {
 
     autoTable(doc, {
       startY: 48,
-      head: [["Metric", "Score"]],
+      head: [["Metric", "Score", "Performance"]],
       body: [
-        ["Total Responses",  summary.totalEvaluations.toString()],
-        ["Avg Overall",      summary.averageOverall.toFixed(2)],
-        ["Avg Clarity",      summary.averageClarity.toFixed(2)],
-        ["Avg Engagement",   summary.averageEngagement.toFixed(2)],
-        ["Avg Materials",    summary.averageMaterials.toFixed(2)],
-        ["Avg Organization", summary.averageOrganization.toFixed(2)],
-        ["Avg Feedback",     summary.averageFeedback.toFixed(2)],
-        ["Avg Pace",         summary.averagePace.toFixed(2)],
-        ["Avg Support",      summary.averageSupport.toFixed(2)],
-        ["Avg Fairness",     summary.averageFairness.toFixed(2)],
-        ["Avg Relevance",    summary.averageRelevance.toFixed(2)],
+        ["Total Responses",  summary.totalEvaluations.toString(), "—"],
+        ["Avg Overall",      summary.averageOverall.toFixed(2),      `${((summary.averageOverall / 5) * 100).toFixed(0)}%`],
+        ["Avg Clarity",      summary.averageClarity.toFixed(2),      `${((summary.averageClarity / 5) * 100).toFixed(0)}%`],
+        ["Avg Engagement",   summary.averageEngagement.toFixed(2),   `${((summary.averageEngagement / 5) * 100).toFixed(0)}%`],
+        ["Avg Materials",    summary.averageMaterials.toFixed(2),    `${((summary.averageMaterials / 5) * 100).toFixed(0)}%`],
+        ["Avg Organization", summary.averageOrganization.toFixed(2), `${((summary.averageOrganization / 5) * 100).toFixed(0)}%`],
+        ["Avg Feedback",     summary.averageFeedback.toFixed(2),     `${((summary.averageFeedback / 5) * 100).toFixed(0)}%`],
+        ["Avg Pace",         summary.averagePace.toFixed(2),         `${((summary.averagePace / 5) * 100).toFixed(0)}%`],
+        ["Avg Support",      summary.averageSupport.toFixed(2),      `${((summary.averageSupport / 5) * 100).toFixed(0)}%`],
+        ["Avg Fairness",     summary.averageFairness.toFixed(2),     `${((summary.averageFairness / 5) * 100).toFixed(0)}%`],
+        ["Avg Relevance",    summary.averageRelevance.toFixed(2),    `${((summary.averageRelevance / 5) * 100).toFixed(0)}%`],
       ],
       styles: { fontSize: 10 },
       headStyles: { fillColor: [59, 130, 246] },
@@ -135,16 +135,16 @@ export default function LecturerDashboard() {
 
       autoTable(doc, {
         startY: startY + 4,
-        head: [["Metric", "Score"]],
+        head: [["Metric", "Score", "Performance"]],
         body: [
-          ["Total Responses", totalEvaluations.toString()],
-          ["Overall",    averageOverall.toFixed(2)],
-          ["Clarity",    averageClarity.toFixed(2)],
-          ["Engagement", averageEngagement.toFixed(2)],
-          ["Materials",  averageMaterials.toFixed(2)],
-          ["Feedback",   averageFeedback.toFixed(2)],
-          ["Support",    averageSupport.toFixed(2)],
-          ["Relevance",  averageRelevance.toFixed(2)],
+          ["Total Responses", totalEvaluations.toString(), "—"],
+          ["Overall",    averageOverall.toFixed(2),    `${((averageOverall / 5) * 100).toFixed(0)}%`],
+          ["Clarity",    averageClarity.toFixed(2),    `${((averageClarity / 5) * 100).toFixed(0)}%`],
+          ["Engagement", averageEngagement.toFixed(2), `${((averageEngagement / 5) * 100).toFixed(0)}%`],
+          ["Materials",  averageMaterials.toFixed(2),  `${((averageMaterials / 5) * 100).toFixed(0)}%`],
+          ["Feedback",   averageFeedback.toFixed(2),   `${((averageFeedback / 5) * 100).toFixed(0)}%`],
+          ["Support",    averageSupport.toFixed(2),    `${((averageSupport / 5) * 100).toFixed(0)}%`],
+          ["Relevance",  averageRelevance.toFixed(2),  `${((averageRelevance / 5) * 100).toFixed(0)}%`],
         ],
         styles: { fontSize: 10 },
         headStyles: { fillColor: [99, 102, 241] },
@@ -227,9 +227,9 @@ export default function LecturerDashboard() {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   <StatCard title="Total Responses" value={summary.totalEvaluations.toString()} icon={<Users className="w-6 h-6 text-indigo-600" />} color="bg-indigo-50" />
-                  <StatCard title="Avg Overall"     value={summary.averageOverall.toFixed(1)}     icon={<Star className="w-6 h-6 text-amber-500" />}   color="bg-amber-50" />
-                  <StatCard title="Avg Clarity"     value={summary.averageClarity.toFixed(1)}     icon={<BookOpen className="w-6 h-6 text-blue-500" />} color="bg-blue-50" />
-                  <StatCard title="Avg Engagement"  value={summary.averageEngagement.toFixed(1)}  icon={<TrendingUp className="w-6 h-6 text-emerald-500" />} color="bg-emerald-50" />
+                  <StatCard title="Avg Overall"     value={summary.averageOverall.toFixed(1)}     icon={<Star className="w-6 h-6 text-amber-500" />}   color="bg-amber-50"   subtitle={`${((summary.averageOverall / 5) * 100).toFixed(0)}% performance`} />
+                  <StatCard title="Avg Clarity"     value={summary.averageClarity.toFixed(1)}     icon={<BookOpen className="w-6 h-6 text-blue-500" />} color="bg-blue-50"    subtitle={`${((summary.averageClarity / 5) * 100).toFixed(0)}% performance`} />
+                  <StatCard title="Avg Engagement"  value={summary.averageEngagement.toFixed(1)}  icon={<TrendingUp className="w-6 h-6 text-emerald-500" />} color="bg-emerald-50" subtitle={`${((summary.averageEngagement / 5) * 100).toFixed(0)}% performance`} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
@@ -342,22 +342,32 @@ function CourseBreakdownCard({ breakdown }: { breakdown: any }) {
                 <span className="text-2xl font-bold text-slate-900">{averageOverall.toFixed(1)}</span>
                 <span className="text-sm text-slate-500 font-medium">/ 5 overall</span>
               </div>
+              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-4 py-2.5 rounded-xl">
+                <TrendingUp className="w-5 h-5 text-indigo-500" />
+                <span className="text-2xl font-bold text-indigo-700">{((averageOverall / 5) * 100).toFixed(0)}%</span>
+                <span className="text-sm text-slate-500 font-medium">performance</span>
+              </div>
               <RatingBadge score={averageOverall} />
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {metrics.map(m => (
-                <div key={m.label} className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{m.label}</div>
-                  <div className="text-xl font-bold text-slate-800">{m.value.toFixed(1)}</div>
-                  <div className="mt-1.5 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{ width: `${(m.value / 5) * 100}%` }}
-                    />
+              {metrics.map(m => {
+                const pct = Math.round((m.value / 5) * 100);
+                const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 60 ? 'bg-blue-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-500';
+                return (
+                  <div key={m.label} className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{m.label}</div>
+                    <div className="text-xl font-bold text-slate-800">{m.value.toFixed(1)}</div>
+                    <div className="text-sm font-semibold text-slate-500">{pct}%</div>
+                    <div className="mt-1.5 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${barColor}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {comments && comments.length > 0 && (
@@ -389,13 +399,14 @@ function RatingBadge({ score }: { score: number }) {
   return <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Needs Improvement</span>;
 }
 
-function StatCard({ title, value, icon, color }: { title: string, value: string, icon: React.ReactNode, color: string }) {
+function StatCard({ title, value, icon, color, subtitle }: { title: string, value: string, icon: React.ReactNode, color: string, subtitle?: string }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow flex items-center gap-5">
       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${color}`}>{icon}</div>
       <div>
         <p className="text-sm font-semibold text-slate-500 mb-1">{title}</p>
         <p className="text-3xl font-display font-bold text-slate-900">{value}</p>
+        {subtitle && <p className="text-xs font-semibold text-indigo-500 mt-1">{subtitle}</p>}
       </div>
     </div>
   );
