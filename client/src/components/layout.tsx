@@ -1,10 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, BookOpen, User, Home, LayoutDashboard } from "lucide-react";
+import { BookOpen, LayoutDashboard } from "lucide-react";
 import { Button } from "./ui/button";
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout, isLoggingOut } = useAuth();
+  const { user } = useAuth();
   const [location] = useLocation();
 
   return (
@@ -49,27 +49,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <span className="hidden sm:inline">Dashboard</span>
                   </Link>
                   
-                  <div className="h-8 w-px bg-border mx-2" />
-                  
-                  <div className="flex items-center gap-3 mr-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold border border-indigo-200">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="hidden md:block flex-col leading-tight">
-                      <span className="text-sm font-semibold block">{user.name}</span>
-                      <span className="text-xs text-muted-foreground capitalize">{user.role}</span>
-                    </div>
-                  </div>
 
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => logout()} 
-                    disabled={isLoggingOut}
-                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <LogOut className="w-5 h-5" />
-                  </Button>
                 </>
               ) : (
                 <>

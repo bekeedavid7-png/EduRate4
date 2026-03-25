@@ -14,12 +14,12 @@ import { useCourses } from "@/hooks/use-courses";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis,
+
 } from "recharts";
 import {
   BookOpen, Users, Star, TrendingUp, UserCog,
   MessageSquare, Printer, FileDown, LayoutDashboard,
-  BarChart3, ChevronRight, Lock, Save, Eye, EyeOff,
+  BarChart3, ChevronRight, Lock, Save, Eye, EyeOff, LogOut, Sparkles,
   GraduationCap, Award, Filter,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -38,7 +38,7 @@ function ensurePrintStyles() {
 type Section = "overview" | "reports" | "profile";
 
 export default function LecturerDashboard() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoading: isAuthLoading, logout, isLoggingOut } = useAuth();
   const [, setLocation] = useLocation();
   const { data: summary, isLoading: isSummaryLoading } = useLecturerSummary();
   const [activeSection, setActiveSection] = useState<Section>("overview");
@@ -111,7 +111,15 @@ export default function LecturerDashboard() {
               ))}
             </nav>
 
-            <div className="p-3 border-t border-slate-100">
+            <div className="p-3 border-t border-slate-100 space-y-1">
+              <button
+                onClick={() => logout()}
+                disabled={isLoggingOut}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                {sidebarOpen && <span>{isLoggingOut ? "Logging out..." : "Log Out"}</span>}
+              </button>
               <button
                 onClick={() => setSidebarOpen(o => !o)}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
@@ -235,6 +243,18 @@ function OverviewSection({ summary, courseBreakdowns, user }: any) {
             <FileDown className="w-4 h-4" /> Export PDF
           </Button>
         </div>
+      </div>
+
+      {/* Welcome banner */}
+      <div className="mb-8 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl p-5 text-white flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <Sparkles className="w-4 h-4 text-indigo-200" />
+            <p className="text-indigo-200 text-sm font-semibold uppercase tracking-wider">Welcome back</p>
+          </div>
+          <h2 className="text-xl font-display font-extrabold">{user?.name} 👋</h2>
+        </div>
+        <Award className="w-14 h-14 text-white/20 shrink-0" />
       </div>
 
       {summary.totalEvaluations === 0 ? (
@@ -645,7 +665,7 @@ function CourseBreakdownCard({ breakdown }: { breakdown: any }) {
     { label: "Relevance",  value: averageRelevance },
   ];
 
-  const radarData = metrics.map(m => ({ subject: m.label, score: parseFloat(((m.value / 5) * 100).toFixed(1)) }));
+  const barData = metrics.map(m => ({ name: m.label, pct: Math.round((m.value / 5) * 100), score: m.value }));
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -686,35 +706,25 @@ function CourseBreakdownCard({ breakdown }: { breakdown: any }) {
               <RatingBadge score={averageOverall} />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {metrics.map(m => {
-                  const pct = Math.round((m.value / 5) * 100);
-                  const barColor = pct >= 80 ? "bg-emerald-500" : pct >= 60 ? "bg-blue-500" : pct >= 40 ? "bg-amber-500" : "bg-red-500";
-                  return (
-                    <div key={m.label} className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{m.label}</div>
-                      <div className="text-xl font-bold text-slate-800">{m.value.toFixed(1)}</div>
-                      <div className="text-sm font-semibold text-slate-500">{pct}%</div>
-                      <div className="mt-1.5 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="h-[200px]">
+            <div className="h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={radarData}>
-                    <PolarGrid stroke="#e2e8f0" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: "#64748b", fontSize: 11 }} />
-                    <Radar name="Performance %" dataKey="score" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
-                    <Tooltip contentStyle={{ borderRadius: "10px", border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }} formatter={(v: any) => [`${v}%`, "Score"]} />
-                  </RadarChart>
+                  <BarChart data={barData} layout="vertical" margin={{ top: 0, right: 40, left: 10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={v => `${v}%`} />
+                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontWeight: 500, fontSize: 12 }} width={75} />
+                    <Tooltip
+                      cursor={{ fill: "#f8fafc" }}
+                      contentStyle={{ borderRadius: "10px", border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }}
+                      formatter={(v: any, _: any, props: any) => [`${v}% (${props.payload.score.toFixed(1)} / 5)`, "Performance"]}
+                    />
+                    <Bar dataKey="pct" radius={[0, 6, 6, 0]} maxBarSize={22}>
+                      {barData.map((entry, i) => (
+                        <Cell key={i} fill={entry.pct >= 80 ? "#10b981" : entry.pct >= 60 ? "#3b82f6" : entry.pct >= 40 ? "#f59e0b" : "#ef4444"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
           </div>
         )}
       </div>

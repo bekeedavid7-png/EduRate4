@@ -348,6 +348,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.put("/api/admin/periods/:id/deactivate", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
+    try {
+      const period = await storage.deactivatePeriod(parseInt(req.params.id));
+      res.json(period);
+    } catch {
+      res.status(500).json({ message: "Failed to deactivate period" });
+    }
+  });
+
   app.delete("/api/admin/periods/:id", async (req, res) => {
     if (!isAdmin(req)) return res.status(403).json({ message: "Forbidden" });
     await storage.deletePeriod(parseInt(req.params.id));

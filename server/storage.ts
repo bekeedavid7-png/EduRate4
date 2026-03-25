@@ -49,6 +49,7 @@ export interface IStorage {
   createPeriod(data: { name: string; startDate: Date; endDate: Date; isActive: boolean }): Promise<EvaluationPeriod>;
   deletePeriod(id: number): Promise<void>;
   activatePeriod(id: number): Promise<EvaluationPeriod>;
+  deactivatePeriod(id: number): Promise<EvaluationPeriod>;
   getActivePeriod(): Promise<EvaluationPeriod | undefined>;
 }
 
@@ -161,6 +162,13 @@ export class DatabaseStorage implements IStorage {
     await db.update(evaluationPeriods).set({ isActive: false });
     const [period] = await db.update(evaluationPeriods)
       .set({ isActive: true })
+      .where(eq(evaluationPeriods.id, id))
+      .returning();
+    return period;
+  }
+  async deactivatePeriod(id: number): Promise<EvaluationPeriod> {
+    const [period] = await db.update(evaluationPeriods)
+      .set({ isActive: false })
       .where(eq(evaluationPeriods.id, id))
       .returning();
     return period;
